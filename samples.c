@@ -5,6 +5,8 @@
 
 /* Definitions */
 #define MILLION (1000 * 1000)
+#define AMERICAN_BILLION (1000 * 1000 * 1000)
+#define AMERICAN_HUNDRED_BILLION (100 * AMERICAN_BILLION)
 
 /* Utils */
 double sample_0(uint64_t * seed) { UNUSED(seed); return 0; }
@@ -135,7 +137,7 @@ double sample_cost_effectiveness_cser_bps_per_million(uint64_t * seed){
 
 int main()
 {
-    int n_samples = 1 * MILLION;
+    int n_samples = 100 * MILLION;
     int n_threads = 16;
     double* results = malloc((size_t)n_samples * sizeof(double));
     sampler_parallel(sample_cost_effectiveness_cser_bps_per_million, results, n_threads, n_samples);

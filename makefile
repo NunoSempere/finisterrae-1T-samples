@@ -1,5 +1,5 @@
 OUTPUT=./samples
-CC= clang# gcc
+CC=clang # gcc
 
 build:
 	$(CC) -O3 samples.c ./squiggle_c/squiggle.c  ./squiggle_c/squiggle_more.c -lm -fopenmp -o $(OUTPUT)
@@ -9,6 +9,9 @@ run:
 
 save:
 	$(OUTPUT) > output.txt
+
+save-time:
+	/bin/time -f "\nTime taken: %es" ./samples > output.txt 2>&1 && cat output.txt
 
 install: 
 	rm -r squiggle_c
