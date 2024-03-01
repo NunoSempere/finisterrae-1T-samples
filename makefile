@@ -1,7 +1,8 @@
 OUTPUT=./samples
+CC= clang# gcc
 
 build:
-	gcc -O3 samples.c ./squiggle_c/squiggle.c  ./squiggle_c/squiggle_more.c -lm -fopenmp -o $(OUTPUT)
+	$(CC) -O3 samples.c ./squiggle_c/squiggle.c  ./squiggle_c/squiggle_more.c -lm -fopenmp -o $(OUTPUT)
 
 run:
 	$(OUTPUT)

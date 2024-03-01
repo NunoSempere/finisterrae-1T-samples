@@ -27,16 +27,18 @@ double sample_conditional_impact_cser(uint64_t * seed){
   return conditional_impact_cser;
 }
 
+
+double sample_value_if_not_minuscule(uint64_t * seed) {
+    double fraction_if_not_minuscule = sample_beta(1.9872200324266, 6.36630125578423, seed);
+    // ^ 90% confidence interval: 0.05 to 0.5, i.e., 5% to 50%
+    return fraction_if_not_minuscule;
+}
+
 double sample_relative_value_of_less_valuable_part_of_cser(uint64_t * seed){
     // relative to the value of the more valuable part
 
     double p_minuscule = 0.2;
     double p_not_minuscule = 0.8;
-    double sample_value_if_not_minuscule(uint64_t * seed) {
-        double fraction_if_not_minuscule = sample_beta(1.9872200324266, 6.36630125578423, seed);
-        // ^ 90% confidence interval: 0.05 to 0.5, i.e., 5% to 50%
-        return fraction_if_not_minuscule;
-    }
 
     int n_dists = 2;
     double weights[] = { p_minuscule, p_not_minuscule };
