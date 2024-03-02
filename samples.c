@@ -137,13 +137,13 @@ double sample_cost_effectiveness_cser_bps_per_million(uint64_t * seed){
 
 int main()
 {
-    int n_samples = 1000 * MILLION;
-    int n_threads = 16;
+    int n_samples = 1 * MILLION;
+    int n_threads = 64;
     double* results = malloc((size_t)n_samples * sizeof(double));
     sampler_parallel(sample_cost_effectiveness_cser_bps_per_million, results, n_threads, n_samples);
 
-    printf("\nStats: \n");
-    array_print_stats(results, n_samples);
+    // printf("\nStats: \n");
+    // array_print_stats(results, n_samples);
     int n_bins = 50;
     printf("\nHistogram: \n");
     array_print_histogram(results, n_samples, n_bins);
