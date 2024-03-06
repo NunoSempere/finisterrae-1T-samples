@@ -24,88 +24,18 @@ typedef struct seed_cache_box_t {
 /* Parallel sampler */
 void sampler_parallel(double (*sampler)(uint64_t* seed), double* results, int n_threads, int n_samples)
 {
-
-    // Terms of the division:
-    // a = b * quotient + reminder
-    // a = b * (a/b)    + (a%b)
-    // dividend: a
-    // divisor: b
-    // quotient = a/b
-    // reminder = a%b
-    // "divisor's multiple" := b*(a/b)
-
-    // now, we have n_samples and n_threads
-    // to make our life easy, each thread will have a number of samples of: a/b (quotient)
-    // and we'll compute the remainder of samples separately
-    // to possibly do by Jorge: improve so that the remainder is included in the threads
-
-    int quotient = n_samples / n_threads;
-    int divisor_multiple = quotient * n_threads;
-
-    // uint64_t** seeds = malloc((size_t)n_threads * sizeof(uint64_t*));
     seed_cache_box* cache_box = (seed_cache_box*)malloc(sizeof(seed_cache_box) * (size_t)n_threads);
-    // seed_cache_box cache_box[n_threads]; // we could use the C stack. On normal linux machines, it's 8MB ($ ulimit -s). However, it doesn't quite feel right.
     srand(1);
-    for (int i = 0; i < n_threads; i++) {
-        // Constraints:
-        // - xorshift can't start with 0
-        // - the seeds should be reasonably separated and not correlated
-        cache_box[i].seed = (uint64_t)rand() * (UINT64_MAX / RAND_MAX);
-
-        // Other initializations tried:
-        // *seeds[i] = 1 + i;
-        // *seeds[i] = (i + 0.5)*(UINT64_MAX/n_threads);
-        // *seeds[i] = (i + 0.5)*(UINT64_MAX/n_threads) + constant * i;
-    }
-
     int i;
-#pragma omp parallel private(i)
+    #pragma omp parallel private(i)
     {
-#pragma omp for
-        for (i = 0; i < n_threads; i++) {
-            // It's possible I don't need the for, and could instead call omp
-            // in some different way and get  the thread number with omp_get_thread_num()
-            int lower_bound_inclusive = i * quotient;
-            int upper_bound_not_inclusive = ((i + 1) * quotient); // note the < in the for loop below,
-
-            for (int j = lower_bound_inclusive; j < upper_bound_not_inclusive; j++) {
-                results[j] = sampler(&(cache_box[i].seed));
-                /* 
-                t starts at 0 and ends at T
-                at t=0, 
-                  thread i accesses: results[i*quotient +0], 
-                  thread i+1 acccesses: results[(i+1)*quotient +0]
-                at t=T
-                  thread i accesses: results[(i+1)*quotient -1]
-                  thread i+1 acccesses: results[(i+2)*quotient -1]
-                The results[j] that are directly adjacent are 
-                  results[(i+1)*quotient -1] (accessed by thread i at time T)
-                  results[(i+1)*quotient +0] (accessed by thread i+1 at time 0)
-                and these are themselves adjacent to
-                  results[(i+1)*quotient -2] (accessed by thread i at time T-1)
-                  results[(i+1)*quotient +1] (accessed by thread i+1 at time 2)
-                If T is large enough, which it is, two threads won't access the same
-                cache line at the same time.
-                Pictorially:
-                at t=0 ....i.........I.........
-                at t=T .............i.........I
-                and the two never overlap
-                Note that results[j] is a double, a double has 8 bytes (64 bits)
-                8 doubles fill a cache line of 64 bytes.
-                So we specifically won't get problems as long as n_samples/n_threads > 8
-                n_threads is normally 16, so n_samples > 128 
-                Note also that this is only a problem in terms of speed, if n_samples<128
-                the results are still computed, it'll just be slower
-                */
-            }
+        int myid = omp_get_thread_num();
+        cache_box[myid].seed = (uint64_t)rand() * (UINT64_MAX / RAND_MAX);
+        #pragma omp for
+        for (i = 0; i < n_samples; i++) {
+            results[i] = sampler(&(cache_box[myid].seed));
         }
     }
-    for (int j = divisor_multiple; j < n_samples; j++) {
-        results[j] = sampler(&(cache_box[0].seed));
-        // we can just reuse a seed,
-        // this isn't problematic because we;ve now stopped doing multithreading
-    }
-
     free(cache_box);
 }
 
@@ -212,7 +142,6 @@ void array_print_stats(double xs[], int n){
            " 95%%: %lf\n",
            mean, std, ci_90.low, ci_80.low, ci_50.low, median, ci_50.high, ci_80.high, ci_90.high);
 }
-
 
 void array_print_histogram(double* xs, int n_samples, int n_bins) {
     // Generated with the help of an llm; there might be subtle off-by-one errors

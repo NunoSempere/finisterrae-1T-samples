@@ -168,6 +168,7 @@ double sample_laplace(double successes, double failures, uint64_t* seed)
 double array_sum(double* array, int length)
 {
     double sum = 0.0;
+    // #pragma omp parallel for reduction(+:sum)
     for (int i = 0; i < length; i++) {
         sum += array[i];
     }
@@ -192,6 +193,7 @@ double array_std(double* array, int length)
 {
     double mean = array_mean(array, length);
     double std = 0.0;
+    // #pragma omp parallel for reduction(+:std)
     for (int i = 0; i < length; i++) {
         std += (array[i] - mean) * (array[i] - mean);
     }

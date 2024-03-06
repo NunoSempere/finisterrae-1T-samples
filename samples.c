@@ -137,7 +137,7 @@ double sample_cost_effectiveness_cser_bps_per_million(uint64_t * seed){
 
 int main()
 {
-    int n_samples = 1 * MILLION;
+    int n_samples = 100 * MILLION;
     int n_threads = 64;
     double* results = malloc((size_t)n_samples * sizeof(double));
     sampler_parallel(sample_cost_effectiveness_cser_bps_per_million, results, n_threads, n_samples);
