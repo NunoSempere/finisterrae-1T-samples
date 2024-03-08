@@ -141,46 +141,44 @@ void sampler_memory_efficient(double (*sampler)(uint64_t* seed), int n_bins, int
     // sample_parallel stores results in a giant array
     // But this is not workable for a trillion samples
 
+    double mean = 0;
+    double std = 0;
+    double max_value = -DBL_MAX;
+    double min_value = DBL_MAX;
     uint64_t* seed = malloc(sizeof(uint64_t));
     *seed = UINT64_MAX/2; // xorshift can't start with 0
-
-    /* Do first run to get mean & min & max */
-    double mean = 0;
-    double max = -DBL_MAX;
-    double min = DBL_MAX;
-    for(int i=0; i<n_samples; i++){
-        double s = sampler(seed);
-        mean+=s;
-        if(max < s){
-            max = s;
-        }
-        if(min > s){
-            min = s;
-        }
-    }
-    mean = mean/n_samples;
-
-    /* Set up histogram */
     int *bins = (int*) calloc((size_t)n_bins, sizeof(int));
     if (bins == NULL) {
         fprintf(stderr, "Memory allocation for bins failed.\n");
         return;
     }
 
-    if (min == max) { // avoid division by 0
-        max++;
+    /* Do first run to get mean & min & max */
+    for(int i=0; i<n_samples; i++){
+        double s = sampler(seed);
+        mean+=s;
+        if(max_value < s){
+            max_value = s;
+        }
+        if(min_value > s){
+            min_value = s;
+        }
     }
-    double range = max - min;
+
+    mean = mean/n_samples;
+    if (min_value == max_value) { // avoid division by 0
+        max_value++;
+    }
+    double range = max_value - min_value;
     double bin_width = range / n_bins;
 
     /* Do second pass */
     *seed = UINT64_MAX/2; // go back to the beginning
-    double std = 0;
     for(int i=0; i<n_samples; i++){
         double s = sampler(seed);
         std += (s - mean) * (s - mean);
 
-        int bin_index = (int)((s - min) / bin_width);
+        int bin_index = (int)((s - min_value) / bin_width);
         if (bin_index == n_bins) {
             bin_index--; // Last bin includes max_value
         }
@@ -188,14 +186,12 @@ void sampler_memory_efficient(double (*sampler)(uint64_t* seed), int n_bins, int
     }
     std = sqrt(std/n_samples);
 
-    // Print stats
+    // Print results
     printf("Mean: %lf\n"
            " Std: %lf\n",
            mean, std);
-
-
     print_histogram(bins, n_bins, min_value, bin_width);
-    // Free the allocated memory for bins
+
     free(bins);
     return;
 
