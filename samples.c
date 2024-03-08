@@ -2,6 +2,7 @@
 #include "squiggle_c/squiggle_more.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <float.h>
 
 /* Definitions */
 #define MILLION (1000 * 1000)
@@ -133,6 +134,102 @@ double sample_cost_effectiveness_cser_bps_per_million(uint64_t * seed){
     // keep as constant for now before getting more data 
     double value_cser_bps_per_million = sample_value_cser_bps(seed)/cost_cser_millions;
     return value_cser_bps_per_million;
+}
+
+double sampler_memory_efficient(double (*sampler)(uint64_t* seed), double* results, int n_threads, int n_samples){
+    // sample_parallel stores results in a giant array
+    // But this is not workable for a trillion samples
+
+    uint64_t* seed = malloc(sizeof(uint64_t));
+    *seed = UINT64_MAX/2; // xorshift can't start with 0
+
+    /* Do first run to get mean & min & max */
+    double mean = 0;
+    double max = -DBL_MAX;
+    double min = DBL_MAX
+    for(int i=0; i<n_samples; i++){
+        double s = sampler(seed);
+        mean+=seed;
+        if(max < s){
+            max = seed;
+        }
+        if(min > s){
+            min = seed;
+        }
+    }
+    mean = mean/n_samples;
+
+    /* Set up histogram */
+    double n_bins = 50;
+    int *bins = (int*) calloc((size_t)n_bins, sizeof(int));
+    if (bins == NULL) {
+        fprintf(stderr, "Memory allocation for bins failed.\n");
+        return;
+    }
+
+    if (min == max) { // avoid division by 0
+        max++;
+    }
+    double range = max - min;
+    double bin_width = range / n_bins;
+
+    /* Do second pass */
+    *seed = UINT64_MAX/2; // go back to the beginning
+    double std = 0;
+    for(int i=0; i<n_samples; i++){
+        double s = sampler(seed);
+        std += (s - mean) * (s - mean);
+
+        int bin_index = (int)((s - min) / bin_width);
+        if (bin_index == n_bins) {
+            bin_index--; // Last bin includes max_value
+        }
+        bins[bin_index]++;
+    }
+    std = sqrt(std/n_samples);
+
+    // Print stats
+    printf("Mean: %lf\n"
+           " Std: %lf\n",
+           mean, std);
+    // Calculate histogram scaling factor based on the maximum bin count
+    int max_bin_count = 0;
+    for (int i = 0; i < n_bins; i++) {
+        if (bins[i] > max_bin_count) {
+            max_bin_count = bins[i];
+        }
+    }
+    const int MAX_WIDTH = 50; // Adjust this to your terminal width
+    double scale = max_bin_count > MAX_WIDTH ? (double)MAX_WIDTH / max_bin_count : 1.0;
+
+    // Print the histogram
+    for (int i = 0; i < n_bins; i++) {
+        double bin_start = min_value + i * bin_width;
+        double bin_end = bin_start + bin_width;
+        if(bin_width < 0.01){
+            printf("  [%4.3f, %4.3f): ", bin_start, bin_end); 
+        } else if(bin_width < 0.1){
+            printf("  [%4.2f, %4.2f): ", bin_start, bin_end); 
+        } else if(bin_width < 1){
+            printf("  [%4.1f, %4.1f): ", bin_start, bin_end); 
+        } else if(bin_width < 10){
+            printf("  [%4.0f, %4.0f): ", bin_start, bin_end); 
+        } else {
+            printf("  [%4f, %4f): ", bin_start, bin_end); 
+        }
+        // number of decimals could depend on the number of bins
+        // or on the size of the smallest bucket
+
+        int marks = (int)(bins[i] * scale);
+        for (int j = 0; j < marks; j++) {
+            printf("█");
+        }
+        printf(" %d\n", bins[i]);
+    }
+
+    // Free the allocated memory for bins
+    free(bins);
+
 }
 
 int main()
