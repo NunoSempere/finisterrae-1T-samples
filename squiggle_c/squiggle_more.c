@@ -29,7 +29,7 @@ void sampler_parallel(double (*sampler)(uint64_t* seed), double* results, int n_
     srand(1);
     for (int thread_id = 0; thread_id < n_threads; thread_id++) {
         // Nuño to Jorge: you can't do this in parallel, since rand() is not thread safe
-        cache_box[thread_id].seed = (uthread_idnt64_t)rand() * (UINT64_MAX / RAND_MAX);
+        cache_box[thread_id].seed = (uint64_t)rand() * (UINT64_MAX / RAND_MAX);
     }
 
     omp_set_dynamic(0); 

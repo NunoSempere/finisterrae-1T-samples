@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <float.h>
+#include <math.h>
 
 /* Definitions */
 #define MILLION (1000 * 1000)
@@ -136,7 +137,7 @@ double sample_cost_effectiveness_cser_bps_per_million(uint64_t * seed){
     return value_cser_bps_per_million;
 }
 
-double sampler_memory_efficient(double (*sampler)(uint64_t* seed), double* results, int n_threads, int n_samples){
+void sampler_memory_efficient(double (*sampler)(uint64_t* seed), int n_bins, int n_samples){
     // sample_parallel stores results in a giant array
     // But this is not workable for a trillion samples
 
@@ -146,21 +147,20 @@ double sampler_memory_efficient(double (*sampler)(uint64_t* seed), double* resul
     /* Do first run to get mean & min & max */
     double mean = 0;
     double max = -DBL_MAX;
-    double min = DBL_MAX
+    double min = DBL_MAX;
     for(int i=0; i<n_samples; i++){
         double s = sampler(seed);
-        mean+=seed;
+        mean+=s;
         if(max < s){
-            max = seed;
+            max = s;
         }
         if(min > s){
-            min = seed;
+            min = s;
         }
     }
     mean = mean/n_samples;
 
     /* Set up histogram */
-    double n_bins = 50;
     int *bins = (int*) calloc((size_t)n_bins, sizeof(int));
     if (bins == NULL) {
         fprintf(stderr, "Memory allocation for bins failed.\n");
@@ -204,7 +204,7 @@ double sampler_memory_efficient(double (*sampler)(uint64_t* seed), double* resul
 
     // Print the histogram
     for (int i = 0; i < n_bins; i++) {
-        double bin_start = min_value + i * bin_width;
+        double bin_start = min + i * bin_width;
         double bin_end = bin_start + bin_width;
         if(bin_width < 0.01){
             printf("  [%4.3f, %4.3f): ", bin_start, bin_end); 
@@ -229,22 +229,16 @@ double sampler_memory_efficient(double (*sampler)(uint64_t* seed), double* resul
 
     // Free the allocated memory for bins
     free(bins);
+    return;
 
 }
 
 int main()
 {
-    int n_samples = 100 * MILLION;
-    int n_threads = 64;
-    double* results = malloc((size_t)n_samples * sizeof(double));
-    sampler_parallel(sample_cost_effectiveness_cser_bps_per_million, results, n_threads, n_samples);
-
-    // printf("\nStats: \n");
-    // array_print_stats(results, n_samples);
+    int n_samples = 1 * MILLION;
     int n_bins = 50;
-    printf("\nHistogram: \n");
-    array_print_histogram(results, n_samples, n_bins);
 
-    free(results);
+    sampler_memory_efficient(sample_cost_effectiveness_cser_bps_per_million, n_bins, n_samples);
+
 }
 

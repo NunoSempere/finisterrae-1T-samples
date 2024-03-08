@@ -1,6 +1,6 @@
 OUTPUT=./samples
-CC=icc # gcc
-
+# CC=icc
+CC=gcc
 build:
 	$(CC) -O3 -march=native samples.c ./squiggle_c/squiggle.c  ./squiggle_c/squiggle_more.c -lm -fopenmp -o $(OUTPUT)
 
