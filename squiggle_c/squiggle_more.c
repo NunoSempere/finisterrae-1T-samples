@@ -151,6 +151,45 @@ void array_print_stats(double xs[], int n){
            mean, std, ci_90.low, ci_80.low, ci_50.low, median, ci_50.high, ci_80.high, ci_90.high);
 }
 
+void print_histogram(int* bins, int n_bins, double min_value, double bin_width){
+
+    // Calculate the scaling factor based on the maximum bin count
+    int max_bin_count = 0;
+    for (int i = 0; i < n_bins; i++) {
+        if (bins[i] > max_bin_count) {
+            max_bin_count = bins[i];
+        }
+    }
+    const int MAX_WIDTH = 50; // Adjust this to your terminal width
+    double scale = max_bin_count > MAX_WIDTH ? (double)MAX_WIDTH / max_bin_count : 1.0;
+
+    // Print the histogram
+    for (int i = 0; i < n_bins; i++) {
+        double bin_start = min_value + i * bin_width;
+        double bin_end = bin_start + bin_width;
+        if(bin_width < 0.01){
+            printf("  [%4.3f, %4.3f): ", bin_start, bin_end); 
+        } else if(bin_width < 0.1){
+            printf("  [%4.2f, %4.2f): ", bin_start, bin_end); 
+        } else if(bin_width < 1){
+            printf("  [%4.1f, %4.1f): ", bin_start, bin_end); 
+        } else if(bin_width < 10){
+            printf("  [%4.0f, %4.0f): ", bin_start, bin_end); 
+        } else {
+            printf("  [%4f, %4f): ", bin_start, bin_end); 
+        }
+        // number of decimals could depend on the number of bins
+        // or on the size of the smallest bucket
+
+        int marks = (int)(bins[i] * scale);
+        for (int j = 0; j < marks; j++) {
+            printf("█");
+        }
+        printf(" %d\n", bins[i]);
+    }
+
+}
+
 void array_print_histogram(double* xs, int n_samples, int n_bins) {
     // Generated with the help of an llm; there might be subtle off-by-one errors
     // interface inspired by <https://github.com/red-data-tools/YouPlot>
@@ -198,41 +237,7 @@ void array_print_histogram(double* xs, int n_samples, int n_bins) {
         bins[bin_index]++;
     }
 
-    // Calculate the scaling factor based on the maximum bin count
-    int max_bin_count = 0;
-    for (int i = 0; i < n_bins; i++) {
-        if (bins[i] > max_bin_count) {
-            max_bin_count = bins[i];
-        }
-    }
-    const int MAX_WIDTH = 50; // Adjust this to your terminal width
-    double scale = max_bin_count > MAX_WIDTH ? (double)MAX_WIDTH / max_bin_count : 1.0;
-
-    // Print the histogram
-    for (int i = 0; i < n_bins; i++) {
-        double bin_start = min_value + i * bin_width;
-        double bin_end = bin_start + bin_width;
-        if(bin_width < 0.01){
-            printf("  [%4.3f, %4.3f): ", bin_start, bin_end); 
-        } else if(bin_width < 0.1){
-            printf("  [%4.2f, %4.2f): ", bin_start, bin_end); 
-        } else if(bin_width < 1){
-            printf("  [%4.1f, %4.1f): ", bin_start, bin_end); 
-        } else if(bin_width < 10){
-            printf("  [%4.0f, %4.0f): ", bin_start, bin_end); 
-        } else {
-            printf("  [%4f, %4f): ", bin_start, bin_end); 
-        }
-        // number of decimals could depend on the number of bins
-        // or on the size of the smallest bucket
-
-        int marks = (int)(bins[i] * scale);
-        for (int j = 0; j < marks; j++) {
-            printf("█");
-        }
-        printf(" %d\n", bins[i]);
-    }
-
+    print_histogram(bins, n_bins, min_value, bin_width);
     // Free the allocated memory for bins
     free(bins);
 }
