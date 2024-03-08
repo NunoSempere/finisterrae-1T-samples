@@ -25,15 +25,23 @@ typedef struct seed_cache_box_t {
 void sampler_parallel(double (*sampler)(uint64_t* seed), double* results, int n_threads, int n_samples)
 {
     seed_cache_box* cache_box = (seed_cache_box*)malloc(sizeof(seed_cache_box) * (size_t)n_threads);
+
     srand(1);
+    for (int thread_id = 0; thread_id < n_threads; thread_id++) {
+        // Nuño to Jorge: you can't do this in parallel, since rand() is not thread safe
+        cache_box[thread_id].seed = (uthread_idnt64_t)rand() * (Uthread_idNT64_MAX / RAND_MAX);
+    }
+
+    omp_set_dynamic(0); 
+    omp_set_num_threads(n_threads);
+
     int i;
     #pragma omp parallel private(i)
     {
-        int myid = omp_get_thread_num();
-        cache_box[myid].seed = (uint64_t)rand() * (UINT64_MAX / RAND_MAX);
+        int thread_id = omp_get_thread_num();
         #pragma omp for
         for (i = 0; i < n_samples; i++) {
-            results[i] = sampler(&(cache_box[myid].seed));
+            results[i] = sampler(&(cache_box[thread_id].seed));
         }
     }
     free(cache_box);
