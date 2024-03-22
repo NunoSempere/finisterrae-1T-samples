@@ -1,0 +1,2 @@
+- [x] Write sketch of post/paper
+- [ ] 
