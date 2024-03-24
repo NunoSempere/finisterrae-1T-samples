@@ -13,6 +13,9 @@ save:
 save-time:
 	/bin/time -f "\nTime taken: %es" ./samples > output.txt 2>&1 && cat output.txt
 
+launch:
+	./launch.sh
+
 install: 
 	rm -r squiggle_c
 	wget https://git.nunosempere.com/personal/squiggle.c/raw/branch/master/squiggle.c
