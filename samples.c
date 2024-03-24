@@ -257,12 +257,11 @@ int main(int argc,char **argv)
     int n_threads = 64;
 
     //START MPI ENVIRONMENT
-    int mpi_id, npes;
+    int mpi_id, n_processes;
     MPI_Status status;
     MPI_Init(&argc, &argv);
-    MPI_Comm_size(MPI_COMM_WORLD, &npes);
+    MPI_Comm_size(MPI_COMM_WORLD, &n_processes);
     MPI_Comm_rank(MPI_COMM_WORLD, &mpi_id);
-
 
     // Get one sample
     uint64_t* seed = malloc(sizeof(uint64_t));
@@ -271,7 +270,7 @@ int main(int argc,char **argv)
     Chunk_stats aggregate_result_data = {.n_samples=1, .min=s , .max=s , .mean=s, .variance=0};
     
     Chunk_stats chunk_stats;
-    Chunk_stats *chunk_stats_array = (Chunk_stats*) malloc(npes * sizeof(Chunk_stats));
+    Chunk_stats *chunk_stats_array = (Chunk_stats*) malloc(n_processes * sizeof(Chunk_stats));
 
     //GET NUMBER OF THREADS
     #pragma omp parallel 
@@ -282,11 +281,11 @@ int main(int argc,char **argv)
     }
 
     for (int i=0; i<10; i++) {
-        sampler_parallel(sample_cost_effectiveness_cser_bps_per_million, samples, n_threads, n_samples, mpi_id+1+i*npes);
+        sampler_parallel(sample_cost_effectiveness_cser_bps_per_million, samples, n_threads, n_samples, mpi_id+1+i*n_processes);
 
         save_chunk_stats_to_struct(&chunk_stats, samples, n_samples);
             // Debugging
-            // for (int i=0; i<npes; i++){
+            // for (int i=0; i<n_processes; i++){
             //     if (mpi_id==i)
             //         print_stats(&chunk_stats);
             //     MPI_Barrier(MPI_COMM_WORLD);
@@ -294,7 +293,7 @@ int main(int argc,char **argv)
         MPI_Gather(&chunk_stats, sizeof(Chunk_stats), MPI_CHAR, chunk_stats_array, sizeof(Chunk_stats), MPI_CHAR, 0, MPI_COMM_WORLD);
 
         if (mpi_id==0) {
-            reduce_chunk_stats(&aggregate_result_data, chunk_stats_array, npes);
+            reduce_chunk_stats(&aggregate_result_data, chunk_stats_array, n_processes);
             printf("Iter %2d:\n", i);
             print_stats(&aggregate_result_data);
         }
