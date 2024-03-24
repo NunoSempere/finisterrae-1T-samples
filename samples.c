@@ -233,13 +233,16 @@ inline double combine_variances (Chunk_stats *x, Chunk_stats *y) {
 
 void reduce_chunk_stats (Chunk_stats* output, Chunk_stats* cs, int n_chunks) {
     
+    double sum_weighted_means = output->mean * output->n_samples;
     for (int i=0; i<n_chunks; i++) {
-        output->variance = combine_variances(output, cs+i);
-        output->mean = (output->mean * output->n_samples + cs[i].mean * cs[i].n_samples) / (output->n_samples + cs[i].n_samples);
+        sum_weighted_means += cs[i].mean * cs[i].n_samples;
         output->n_samples += cs[i].n_samples;
-        output->min = output->min < cs[i].min ? output->min : cs[i].min;
-        output->max = output->max > cs[i].max ? output->max : cs[i].max;
+        output->mean = sum_weighted_means / output->n_samples; // need this for the variance calculations
+        output->variance = combine_variances(output, cs+i);
+        if(output->min > cs[i]) output->min = cs[i];
+        if(output->max < cs[i]) output->max = cs[i];
     }
+    output->mean = sum_weighted_means / output->n_samples;
 }
 
 void print_stats(Chunk_stats* result) {
