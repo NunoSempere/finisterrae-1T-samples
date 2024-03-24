@@ -26,6 +26,6 @@ Dudas 2024-03-31
     - de hecho, tienes various tipos de results (samples, chunks)
   - myid, myblah es un mal patrón
 - Qué es npes?
-- To do: change combination of means
-- To do: get one sample for initial combination
+- [x] To do: change combination of means
+- [x] To do: get one sample for initial combination
 - #pragma omp single ??

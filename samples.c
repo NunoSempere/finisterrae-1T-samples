@@ -231,18 +231,18 @@ inline double combine_variances (Chunk_stats *x, Chunk_stats *y) {
     // but use the standard deviation of the samples, no the estimate of the standard deviation of the underlying distribution
 }
 
-void reduce_chunk_stats (Chunk_stats* output, Chunk_stats* cs, int n_chunks) {
+void reduce_chunk_stats (Chunk_stats* accumulator, Chunk_stats* cs, int n_chunks) {
     
-    double sum_weighted_means = output->mean * output->n_samples;
+    double sum_weighted_means = accumulator->mean * accumulator->n_samples;
     for (int i=0; i<n_chunks; i++) {
         sum_weighted_means += cs[i].mean * cs[i].n_samples;
-        output->n_samples += cs[i].n_samples;
-        output->mean = sum_weighted_means / output->n_samples; // need this for the variance calculations
-        output->variance = combine_variances(output, cs+i);
-        if(output->min > cs[i]) output->min = cs[i];
-        if(output->max < cs[i]) output->max = cs[i];
+        accumulator->n_samples += cs[i].n_samples;
+        accumulator->mean = sum_weighted_means / accumulator->n_samples; // need this for the variance calculations
+        accumulator->variance = combine_variances(accumulator, cs+i);
+        if(accumulator->min > cs[i]) accumulator->min = cs[i];
+        if(accumulator->max < cs[i]) accumulator->max = cs[i];
     }
-    output->mean = sum_weighted_means / output->n_samples;
+    accumulator->mean = sum_weighted_means / accumulator->n_samples;
 }
 
 void print_stats(Chunk_stats* result) {
