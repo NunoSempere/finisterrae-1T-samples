@@ -249,7 +249,7 @@ ci sampler_get_ci(ci interval, double (*sampler)(uint64_t*), int n, uint64_t* se
 {
     UNUSED(seed); // don't want to use it right now, but want to preserve ability to do so (e.g., remove parallelism from internals). Also nicer for consistency.
     double* xs = malloc((size_t)n * sizeof(double));
-    sampler_parallel(sampler, xs, 16, n);
+    sampler_parallel(sampler, xs, 16, n, 1);
     ci result = array_get_ci(interval, xs, n);
     free(xs);
     return result;

@@ -2,7 +2,7 @@
 #define SQUIGGLE_C_EXTRA
 
 /* Parallel sampling */
-void sampler_parallel(double (*sampler)(uint64_t* seed), double* results,  uint64_t n_samples, int m_seed);
+void sampler_parallel(double (*sampler)(uint64_t* seed), double* results, int n_threads, uint64_t n_samples, int m_seed);
 
 /* Get median and confidence intervals */
 double array_get_median(double xs[], int n);
