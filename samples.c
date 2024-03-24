@@ -199,7 +199,7 @@ void sampler_memory_efficient(double (*sampler)(uint64_t* seed), int n_bins, int
 
 }
 
-typedef struct Chunk_stats {
+typedef struct _Chunk_stats {
     uint64_t n_samples;
     double min;
     double max;
@@ -263,8 +263,14 @@ int main(int argc,char **argv)
     MPI_Comm_size(MPI_COMM_WORLD, &npes);
     MPI_Comm_rank(MPI_COMM_WORLD, &mpi_id);
 
+
+    // Get one sample
+    uint64_t* seed = malloc(sizeof(uint64_t));
+    *seed = UINT64_MAX/2;
+    double s = sample_cost_effectiveness_cser_bps_per_million(seed);
+    Chunk_stats aggregate_result_data = {.n_samples=1, .min=s , .max=s , .mean=s, .variance=0};
+    
     Chunk_stats chunk_stats;
-    Chunk_stats aggregate_result_data = {.n_samples=0, .min=999999999.0 , .max=-999999999.0 , .mean=0, .variance=0};
     Chunk_stats *chunk_stats_array = (Chunk_stats*) malloc(npes * sizeof(Chunk_stats));
 
     //GET NUMBER OF THREADS
