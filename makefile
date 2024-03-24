@@ -15,6 +15,7 @@ save-time:
 
 launch:
 	sbatch launch.sh
+	squeue
 
 install: 
 	rm -r squiggle_c
