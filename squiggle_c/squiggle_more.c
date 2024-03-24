@@ -22,11 +22,11 @@ typedef struct seed_cache_box_t {
 // <http://www.nic.uoregon.edu/~khuck/ts/acumem-report/manual_html/ch06s07.html>
 
 /* Parallel sampler */
-void sampler_parallel(double (*sampler)(uint64_t* seed), double* results, int n_threads, int n_samples)
+void sampler_parallel(double (*sampler)(uint64_t* seed), double* results, int n_threads, uint64_t n_samples, int m_seed)
 {
     seed_cache_box* cache_box = (seed_cache_box*)malloc(sizeof(seed_cache_box) * (size_t)n_threads);
 
-    srand(1);
+    srand(m_seed);
     for (int thread_id = 0; thread_id < n_threads; thread_id++) {
         // Nuño to Jorge: you can't do this in parallel, since rand() is not thread safe
         cache_box[thread_id].seed = (uint64_t)rand() * (UINT64_MAX / RAND_MAX);
