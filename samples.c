@@ -199,108 +199,105 @@ void sampler_memory_efficient(double (*sampler)(uint64_t* seed), int n_bins, int
 
 }
 
-typedef struct Result_data {
+typedef struct Chunk_stats {
     uint64_t n_samples;
     double min;
     double max;
     double mean;
     double variance;
-} Result_data;
+} Chunk_stats;
 
-void results_to_data (Result_data* result_data, double* results, int n_samples) {
-    result_data->n_samples = n_samples;
-    result_data->mean = array_mean(results, n_samples);
+void save_chunk_stats_to_struct (Chunk_stats* chunk_stats, double* xs, int n_samples) {
+    chunk_stats->n_samples = n_samples;
+    chunk_stats->mean = array_mean(xs, n_samples);
     double var = 0.0;
-    result_data->min = 999999999.0 ;
-    result_data->max =-999999999.0 ;
+    chunk_stats->min = xs[0];
+    chunk_stats->max = xs[0];
     #pragma omp parallel for simd reduction(+:var)
     for (uint64_t i = 0; i < n_samples; i++) {
-        var += (results[i] - result_data->mean) * (results[i] - result_data->mean);
-        result_data->min = result_data->min < results[i] ? result_data->min : results[i];
-        result_data->max = result_data->max > results[i] ? result_data->max : results[i];
+        var += (xs[i] - chunk_stats->mean) * (xs[i] - chunk_stats->mean);
+        if(chunk_stats->min > xs[i]) chunk_stats->min = xs[i];
+        if(chunk_stats->max < xs[i]) chunk_stats->max = xs[i];
     }
-    result_data->variance = var / n_samples;
+    chunk_stats->variance = var / n_samples;
 }
 
-inline double variance_from_two_dist (Result_data *res_a, Result_data *res_b) {
-    double sum1 = ((res_a->n_samples-1) * res_a->variance + (res_b->n_samples-1)*res_b->variance)/(res_a->n_samples + res_b->n_samples - 1) ;
-    double sum2 = (res_a->n_samples * res_b->n_samples * (res_a->mean - res_b->mean)*(res_a->mean - res_b->mean)) / ((res_a->n_samples + res_b->n_samples) * (res_a->n_samples + res_b->n_samples + 1));
-    return sum1 + sum2;
+inline double combine_variances (Chunk_stats *x, Chunk_stats *y) {
+    double term1 = ((x->n_samples) * x->variance + (y->n_samples)*y->variance)/(x->n_samples + y->n_samples) ;
+    double term2 = (x->n_samples * y->n_samples * (x->mean - y->mean)*(x->mean - y->mean)) / ((x->n_samples + y->n_samples) * (x->n_samples + y->n_samples));
+    double result = term1 + term2;
+    return result;
+    // https://math.stackexchange.com/questions/2971315/how-do-i-combine-standard-deviations-of-two-groups
+    // but use the standard deviation of the samples, no the estimate of the standard deviation of the underlying distribution
 }
 
-void reduce_result_datas (Result_data* output, Result_data* datas, int n_results) {
-    // output->n_samples = datas[0].n_samples;
-    // output->min = datas[0].min;
-    // output->max = datas[0].max;
-    // output->mean = datas[0].mean;
-    // output->variance = datas[0].variance;
+void reduce_chunk_stats (Chunk_stats* output, Chunk_stats* cs, int n_chunks) {
     
-    for (int i=0; i<n_results; i++) {
-        output->variance = variance_from_two_dist(output, datas+i);
-        output->mean = (output->mean * output->n_samples + datas[i].mean * datas[i].n_samples) / (output->n_samples + datas[i].n_samples);
-        output->n_samples += datas[i].n_samples;
-        output->min = output->min < datas[i].min ? output->min : datas[i].min;
-        output->max = output->max > datas[i].max ? output->max : datas[i].max;
+    for (int i=0; i<n_chunks; i++) {
+        output->variance = combine_variances(output, cs+i);
+        output->mean = (output->mean * output->n_samples + cs[i].mean * cs[i].n_samples) / (output->n_samples + cs[i].n_samples);
+        output->n_samples += cs[i].n_samples;
+        output->min = output->min < cs[i].min ? output->min : cs[i].min;
+        output->max = output->max > cs[i].max ? output->max : cs[i].max;
     }
 }
 
-void print_result(Result_data* result) {
+void print_stats(Chunk_stats* result) {
     printf("Result {\n  N_samples: %lu\n  Min:  %4.3lf\n  Max:  %4.3lf\n  Mean: %4.3lf\n  Var:  %4.3lf\n}\n", result->n_samples, result->min, result->max, result->mean, result->variance);
 }
 
 
-
 int main(int argc,char **argv)
 {
-    uint64_t n_samples = 100000000;//25000000000;// 25000* MILLION; If I write it in this fashion (25000* MILLION), compiler whines
+    uint64_t n_samples = 100000000; //25000000000;// 25000* MILLION; If I write it in this fashion (25000* MILLION), compiler whines
+    double* samples = (double*) malloc((size_t)n_samples * sizeof(double));
     int n_threads = 64;
-    double* results = (double*) malloc((size_t)n_samples * sizeof(double));
 
     //START MPI ENVIRONMENT
-    int myid, npes;
+    int mpi_id, npes;
     MPI_Status status;
     MPI_Init(&argc, &argv);
     MPI_Comm_size(MPI_COMM_WORLD, &npes);
-    MPI_Comm_rank(MPI_COMM_WORLD, &myid);
+    MPI_Comm_rank(MPI_COMM_WORLD, &mpi_id);
 
-    Result_data my_result_data;
-    Result_data total_result_data = {.n_samples=0, .min=999999999.0 , .max=-999999999.0 , .mean=0, .variance=0};
-    Result_data *result_datas = (Result_data*) malloc(npes * sizeof(Result_data));
+    Chunk_stats chunk_stats;
+    Chunk_stats aggregate_result_data = {.n_samples=0, .min=999999999.0 , .max=-999999999.0 , .mean=0, .variance=0};
+    Chunk_stats *chunk_stats_array = (Chunk_stats*) malloc(npes * sizeof(Chunk_stats));
 
     //GET NUMBER OF THREADS
     #pragma omp parallel 
     #pragma omp single
     {
         n_threads = omp_get_num_threads();
-        // printf("Num threads on process %d: %d\n", myid, n_threads);
+        // printf("Num threads on process %d: %d\n", mpi_id, n_threads);
     }
 
     for (int i=0; i<10; i++) {
-        sampler_parallel(sample_cost_effectiveness_cser_bps_per_million, results, n_threads, n_samples, myid+1+i*npes);
+        sampler_parallel(sample_cost_effectiveness_cser_bps_per_million, samples, n_threads, n_samples, mpi_id+1+i*npes);
 
-        results_to_data(&my_result_data, results, n_samples);
+        save_chunk_stats_to_struct(&chunk_stats, samples, n_samples);
             // Debugging
             // for (int i=0; i<npes; i++){
-            //     if (myid==i)
-            //         print_result(&my_result_data);
+            //     if (mpi_id==i)
+            //         print_stats(&chunk_stats);
             //     MPI_Barrier(MPI_COMM_WORLD);
             // }
-        MPI_Gather(&my_result_data, sizeof(Result_data), MPI_CHAR, result_datas, sizeof(Result_data), MPI_CHAR, 0, MPI_COMM_WORLD);
+        MPI_Gather(&chunk_stats, sizeof(Chunk_stats), MPI_CHAR, chunk_stats_array, sizeof(Chunk_stats), MPI_CHAR, 0, MPI_COMM_WORLD);
 
-        if (myid==0) {
-            reduce_result_datas(&total_result_data, result_datas, npes);
+        if (mpi_id==0) {
+            reduce_chunk_stats(&aggregate_result_data, chunk_stats_array, npes);
             printf("Iter %2d:\n", i);
-            print_result(&total_result_data);
+            print_stats(&aggregate_result_data);
         }
     }
 
     // printf("\nStats: \n");
-    // array_print_stats(results, n_samples);
+    // array_print_stats(samples, n_samples);
     // int n_bins = 50;
     // printf("\nHistogram: \n");
-    // array_print_histogram(results, n_samples, n_bins);
+    // array_print_histogram(samples, n_samples, n_bins);
 
-    free(results);
+    free(samples);
 
     //END MPI ENVIRONMENT
     MPI_Finalize();

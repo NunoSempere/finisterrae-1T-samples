@@ -15,3 +15,17 @@ But more remains:
 - [ ] ...
 - [ ] Report results, and how they change as the number of samples increases
 - [ ] Insult Python
+
+Dudas 2024-03-31
+
+- [ ] Por qué es "mpi.h" en vez de <mpi.h>???
+- [ ] Qué comandos estás utilizando para ejecutar esto? Los puedes añadir al makefile?
+- Estilo: 
+  - me gusta que las funciones empiecen con un verbo. 
+  - result es demasiado genérico, lo he cambiado a chunk
+    - de hecho, tienes various tipos de results (samples, chunks)
+  - myid, myblah es un mal patrón
+- Qué es npes?
+- To do: change combination of means
+- To do: get one sample for initial combination
+- #pragma omp single ??
