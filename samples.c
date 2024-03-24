@@ -239,8 +239,8 @@ void reduce_chunk_stats (Chunk_stats* accumulator, Chunk_stats* cs, int n_chunks
         accumulator->n_samples += cs[i].n_samples;
         accumulator->mean = sum_weighted_means / accumulator->n_samples; // need this for the variance calculations
         accumulator->variance = combine_variances(accumulator, cs+i);
-        if(accumulator->min > cs[i]) accumulator->min = cs[i];
-        if(accumulator->max < cs[i]) accumulator->max = cs[i];
+        if(accumulator->min > cs[i].min) accumulator->min = cs[i].min;
+        if(accumulator->max < cs[i].max) accumulator->max = cs[i].max;
     }
     accumulator->mean = sum_weighted_means / accumulator->n_samples;
 }
@@ -249,10 +249,9 @@ void print_stats(Chunk_stats* result) {
     printf("Result {\n  N_samples: %lu\n  Min:  %4.3lf\n  Max:  %4.3lf\n  Mean: %4.3lf\n  Var:  %4.3lf\n}\n", result->n_samples, result->min, result->max, result->mean, result->variance);
 }
 
-
 int main(int argc,char **argv)
 {
-    uint64_t n_samples = 100000000; //25000000000;// 25000* MILLION; If I write it in this fashion (25000* MILLION), compiler whines
+    uint64_t n_samples = 25000000000;// 25000* MILLION; If I write it in this fashion (25000* MILLION), compiler whines
     double* samples = (double*) malloc((size_t)n_samples * sizeof(double));
     int n_threads = 64;
 
@@ -280,7 +279,7 @@ int main(int argc,char **argv)
         // printf("Num threads on process %d: %d\n", mpi_id, n_threads);
     }
 
-    for (int i=0; i<10; i++) {
+    for (int i=0; ; i++) {
         sampler_parallel(sample_cost_effectiveness_cser_bps_per_million, samples, n_threads, n_samples, mpi_id+1+i*n_processes);
 
         save_chunk_stats_to_struct(&chunk_stats, samples, n_samples);
@@ -294,7 +293,7 @@ int main(int argc,char **argv)
 
         if (mpi_id==0) {
             reduce_chunk_stats(&aggregate_result_data, chunk_stats_array, n_processes);
-            printf("Iter %2d:\n", i);
+            printf("\nIter %3d:\n", i);
             print_stats(&aggregate_result_data);
         }
     }
