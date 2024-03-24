@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <float.h>
 #include <math.h>
+#include "mpi.h"
+#include <omp.h>
 
 /* Definitions */
 #define MILLION (1000 * 1000)
@@ -197,12 +199,110 @@ void sampler_memory_efficient(double (*sampler)(uint64_t* seed), int n_bins, int
 
 }
 
-int main()
-{
-    int n_samples = 1 * MILLION;
-    int n_bins = 50;
+typedef struct Result_data {
+    uint64_t n_samples;
+    double min;
+    double max;
+    double mean;
+    double variance;
+} Result_data;
 
-    sampler_memory_efficient(sample_cost_effectiveness_cser_bps_per_million, n_bins, n_samples);
-
+void results_to_data (Result_data* result_data, double* results, int n_samples) {
+    result_data->n_samples = n_samples;
+    result_data->mean = array_mean(results, n_samples);
+    double var = 0.0;
+    result_data->min = 999999999.0 ;
+    result_data->max =-999999999.0 ;
+    #pragma omp parallel for simd reduction(+:var)
+    for (uint64_t i = 0; i < n_samples; i++) {
+        var += (results[i] - result_data->mean) * (results[i] - result_data->mean);
+        result_data->min = result_data->min < results[i] ? result_data->min : results[i];
+        result_data->max = result_data->max > results[i] ? result_data->max : results[i];
+    }
+    result_data->variance = var / n_samples;
 }
 
+inline double variance_from_two_dist (Result_data *res_a, Result_data *res_b) {
+    double sum1 = ((res_a->n_samples-1) * res_a->variance + (res_b->n_samples-1)*res_b->variance)/(res_a->n_samples + res_b->n_samples - 1) ;
+    double sum2 = (res_a->n_samples * res_b->n_samples * (res_a->mean - res_b->mean)*(res_a->mean - res_b->mean)) / ((res_a->n_samples + res_b->n_samples) * (res_a->n_samples + res_b->n_samples + 1));
+    return sum1 + sum2;
+}
+
+void reduce_result_datas (Result_data* output, Result_data* datas, int n_results) {
+    // output->n_samples = datas[0].n_samples;
+    // output->min = datas[0].min;
+    // output->max = datas[0].max;
+    // output->mean = datas[0].mean;
+    // output->variance = datas[0].variance;
+    
+    for (int i=0; i<n_results; i++) {
+        output->variance = variance_from_two_dist(output, datas+i);
+        output->mean = (output->mean * output->n_samples + datas[i].mean * datas[i].n_samples) / (output->n_samples + datas[i].n_samples);
+        output->n_samples += datas[i].n_samples;
+        output->min = output->min < datas[i].min ? output->min : datas[i].min;
+        output->max = output->max > datas[i].max ? output->max : datas[i].max;
+    }
+}
+
+void print_result(Result_data* result) {
+    printf("Result {\n  N_samples: %lu\n  Min:  %4.3lf\n  Max:  %4.3lf\n  Mean: %4.3lf\n  Var:  %4.3lf\n}\n", result->n_samples, result->min, result->max, result->mean, result->variance);
+}
+
+
+
+int main(int argc,char **argv)
+{
+    uint64_t n_samples = 100000000;//25000000000;// 25000* MILLION; If I write it in this fashion (25000* MILLION), compiler whines
+    int n_threads = 64;
+    double* results = (double*) malloc((size_t)n_samples * sizeof(double));
+
+    //START MPI ENVIRONMENT
+    int myid, npes;
+    MPI_Status status;
+    MPI_Init(&argc, &argv);
+    MPI_Comm_size(MPI_COMM_WORLD, &npes);
+    MPI_Comm_rank(MPI_COMM_WORLD, &myid);
+
+    Result_data my_result_data;
+    Result_data total_result_data = {.n_samples=0, .min=999999999.0 , .max=-999999999.0 , .mean=0, .variance=0};
+    Result_data *result_datas = (Result_data*) malloc(npes * sizeof(Result_data));
+
+    //GET NUMBER OF THREADS
+    #pragma omp parallel 
+    #pragma omp single
+    {
+        n_threads = omp_get_num_threads();
+        // printf("Num threads on process %d: %d\n", myid, n_threads);
+    }
+
+    for (int i=0; i<10; i++) {
+        sampler_parallel(sample_cost_effectiveness_cser_bps_per_million, results, n_threads, n_samples, myid+1+i*npes);
+
+        results_to_data(&my_result_data, results, n_samples);
+            // Debugging
+            // for (int i=0; i<npes; i++){
+            //     if (myid==i)
+            //         print_result(&my_result_data);
+            //     MPI_Barrier(MPI_COMM_WORLD);
+            // }
+        MPI_Gather(&my_result_data, sizeof(Result_data), MPI_CHAR, result_datas, sizeof(Result_data), MPI_CHAR, 0, MPI_COMM_WORLD);
+
+        if (myid==0) {
+            reduce_result_datas(&total_result_data, result_datas, npes);
+            printf("Iter %2d:\n", i);
+            print_result(&total_result_data);
+        }
+    }
+
+    // printf("\nStats: \n");
+    // array_print_stats(results, n_samples);
+    // int n_bins = 50;
+    // printf("\nHistogram: \n");
+    // array_print_histogram(results, n_samples, n_bins);
+
+    free(results);
+
+    //END MPI ENVIRONMENT
+    MPI_Finalize();
+    return 0;
+}

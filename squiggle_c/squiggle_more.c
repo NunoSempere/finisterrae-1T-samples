@@ -22,11 +22,11 @@ typedef struct seed_cache_box_t {
 // <http://www.nic.uoregon.edu/~khuck/ts/acumem-report/manual_html/ch06s07.html>
 
 /* Parallel sampler */
-void sampler_parallel(double (*sampler)(uint64_t* seed), double* results, int n_threads, int n_samples)
+void sampler_parallel(double (*sampler)(uint64_t* seed), double* results, int n_threads, uint64_t n_samples, int m_seed)
 {
     seed_cache_box* cache_box = (seed_cache_box*)malloc(sizeof(seed_cache_box) * (size_t)n_threads);
 
-    srand(1);
+    srand(m_seed);
     for (int thread_id = 0; thread_id < n_threads; thread_id++) {
         // Nuño to Jorge: you can't do this in parallel, since rand() is not thread safe
         cache_box[thread_id].seed = (uint64_t)rand() * (UINT64_MAX / RAND_MAX);
@@ -249,7 +249,7 @@ ci sampler_get_ci(ci interval, double (*sampler)(uint64_t*), int n, uint64_t* se
 {
     UNUSED(seed); // don't want to use it right now, but want to preserve ability to do so (e.g., remove parallelism from internals). Also nicer for consistency.
     double* xs = malloc((size_t)n * sizeof(double));
-    sampler_parallel(sampler, xs, 16, n);
+    sampler_parallel(sampler, xs, 16, n, 1);
     ci result = array_get_ci(interval, xs, n);
     free(xs);
     return result;
