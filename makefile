@@ -14,7 +14,7 @@ save-time:
 	/bin/time -f "\nTime taken: %es" ./samples > output.txt 2>&1 && cat output.txt
 
 launch:
-	./launch.sh
+	sbatch launch.sh
 
 install: 
 	rm -r squiggle_c
