@@ -20,7 +20,7 @@ To explore those limits, and also just for the sake of the technical challenge, 
 
 ### 1.1. Use a fast language
 
-Our [time to botec](https://github.com/NunoSempere/time-to-botec/) repository compares how fast drawing 10e6 samples from a simple back-of-the-envelope calculation runs in different languages. The comparison depends on our familiarity with the different languages: as we are more familiar with a language, we grow capable of writing better & faster code in it. Nonetheless, speeds are as follows:
+Our [time to botec](https://github.com/NunoSempere/time-to-botec/) repository compares how fast drawing 10e6 samples from a simple back-of-the-envelope calculation runs in different languages. The comparison depends on our familiarity with the different languages: as we are more familiar with a language, we grow capable of writing better & faster code in it. Nonetheless, speeds to get 10e6 samples in one author's computer are as follows:
 
 | Language                    | Time      | 
 |-----------------------------|-----------|
@@ -38,7 +38,7 @@ Our [time to botec](https://github.com/NunoSempere/time-to-botec/) repository co
 | Python 3.9                  | 11,909ms  | 
 | Gavin Howard's bc           | 16,170ms  | 
 
-Readers might have expected this list to include languages such as Rust or zig. FORTRAN, Lisp, Haskell, Java, C#, C++, or Julia are also missing. This is because we are not very familiar with those languages, or because in our attempts to use them we found them too "clunky".
+Readers might have expected this list to include languages such as Rust or zig. FORTRAN, Lisp, Haskell, Java, C#, C++, or Julia are also missing. This is because we are not very familiar with those languages, or because in our attempts to use them we found them too "clunky". Still, the above table shows that the time it takes to run a Fermi model varies 3 to 4 orders of magnitude depending on the language choice (and skill at using it), and so language choice will be an important choice. 
 
 ### 1.2. Use some straightforward tricks
 
@@ -50,6 +50,8 @@ Compile to the native architecture. Profile. Compiler flags.
 
 Perhaps concession was defining a mixture
 One of the few concessions was defining a function to mix several other distributions. This was worse than doing something like: 
+
+Go has almost none of these tricks. 
 
 ```
 double p = sample_uniform(0,1, seed);
