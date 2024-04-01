@@ -8,23 +8,49 @@
 #include <omp.h>
 #include "model.h"
 
-typedef struct _Chunk_stats {
+typedef struct _Summary_stats {
     uint64_t n_samples;
     double min;
     double max;
     double mean;
     double variance;
-} Chunk_stats;
+} Summary_stats;
 
-Chunk_stats get_chunk_stats_from_one_sample_of_sampler(double (*sampler)(uint64_t* seed), uint64_t* seed){
+Summary_stats get_chunk_stats_from_one_sample_of_sampler(double (*sampler)(uint64_t* seed), uint64_t* seed){
 
   double s = sampler(seed);
-  Chunk_stats stats_of_one = {.n_samples=1, .min=s , .max=s , .mean=s, .variance=0};
+  Summary_stats stats_of_one = {.n_samples=1, .min=s , .max=s , .mean=s, .variance=0};
   return stats_of_one; 
-
 }
 
-Chunk_stats sampler_finisterrae(double (*sampler)(uint64_t* seed)){
+inline double combine_variances (Summary_stats *x, Summary_stats *y) {
+    double term1 = ((x->n_samples) * x->variance + (y->n_samples)*y->variance)/(x->n_samples + y->n_samples) ;
+    double term2 = (x->n_samples * y->n_samples * (x->mean - y->mean)*(x->mean - y->mean)) / ((x->n_samples + y->n_samples) * (x->n_samples + y->n_samples));
+    double result = term1 + term2;
+    return result;
+    // https://math.stackexchange.com/questions/2971315/how-do-i-combine-standard-deviations-of-two-groups
+    // but use the standard deviation of the samples, no the estimate of the standard deviation of the underlying distribution
+}
+
+void reduce_chunk_stats (Summary_stats* accumulator, Summary_stats* cs, int n_chunks) {
+    
+    double sum_weighted_means = accumulator->mean * accumulator->n_samples;
+    for (int i=0; i<n_chunks; i++) {
+        sum_weighted_means += cs[i].mean * cs[i].n_samples;
+        accumulator->n_samples += cs[i].n_samples;
+        accumulator->mean = sum_weighted_means / accumulator->n_samples; // need this for the variance calculations
+        accumulator->variance = combine_variances(accumulator, cs+i);
+        if(accumulator->min > cs[i].min) accumulator->min = cs[i].min;
+        if(accumulator->max < cs[i].max) accumulator->max = cs[i].max;
+    }
+    accumulator->mean = sum_weighted_means / accumulator->n_samples;
+}
+
+void print_stats(Summary_stats* result) {
+    printf("Result {\n  N_samples: %lu\n  Min:  %4.3lf\n  Max:  %4.3lf\n  Mean: %4.3lf\n  Var:  %4.3lf\n}\n", result->n_samples, result->min, result->max, result->mean, result->variance);
+}
+
+Summary_stats sampler_finisterrae(double (*sampler)(uint64_t* seed)){
   // Function modelled after the sampler_parallel
 
   //START MPI ENVIRONMENT
@@ -34,17 +60,19 @@ Chunk_stats sampler_finisterrae(double (*sampler)(uint64_t* seed)){
   MPI_Comm_size(MPI_COMM_WORLD, &n_processes);
   MPI_Comm_rank(MPI_COMM_WORLD, &mpi_id);
 
-  Chunk_stats individual_mpi_process_stats;   // each mpi process will have one of these
-  Chunk_stats* mpi_processes_stats_array;     // mpi will later aggregate them into one array
-  Chunk_stats aggregated_mpi_processes_stats; // and we will reduce the array into one global stats again
+  Summary_stats individual_mpi_process_stats;   // each mpi process will have one of these
+  Summary_stats* mpi_processes_stats_array;     // mpi will later aggregate them into one array
+  Summary_stats aggregated_mpi_processes_stats; // and we will reduce the array into one global stats again
 
-  mpi_processes_stats_array = (Chunk_stats*) malloc(n_processes * sizeof(Chunk_stats)); 
-  uint64_t* seed = malloc(sizeof(uint64_t)); *seed = UINT64_MAX/2;
-  aggregated_mpi_processes_stats = get_chunk_stats_from_one_sample_of_sampler(sampler, seed); 
+  mpi_processes_stats_array = (Summary_stats*) malloc(n_processes * sizeof(Summary_stats)); 
+  // Use a seed to initialize this global variable
+  uint64_t* seed = malloc(sizeof(uint64_t));
+  *seed = UINT64_MAX/2;
+  aggregated_mpi_processes_stats = get_chunk_stats_from_one_sample_of_sampler(sampler, cache_box[0].seed); 
   free(seed);
 
   // Get the number of threads
-  #pragma omp parallel /* N: I don't understand what this directive is doing */
+  #pragma omp parallel /* N: I don't quite understand what this directive is doing. */
   #pragma omp single
   {
       n_threads = omp_get_num_threads();
@@ -58,21 +86,19 @@ Chunk_stats sampler_finisterrae(double (*sampler)(uint64_t* seed)){
 
   // Initialize seeds
   seed_cache_box* cache_box = (seed_cache_box*)malloc(sizeof(seed_cache_box) * (size_t)n_threads);
-  Chunk_stats* omp_thread_stats_array = (Chunk_stats*) malloc(sizeof(Chunk_stats) * (size_t)n_threads)
 
   int mpi_seed = mpi_id+1+i*n_processes;
-  srand(mpi_seed);
+  srand(mpi_seed); /* Another alternative would be to distribute the seeds evenly, but I'm afraid that if I do this they'll end up somehow correlated */
   for (int thread_id = 0; thread_id < n_threads; thread_id++) {
     // Nuño to Jorge: you can't do this in parallel, since rand() is not thread safe
     cache_box[thread_id].seed = (uint64_t)rand() * (UINT64_MAX / RAND_MAX);
-    omp_thread_stats_array[i] = get_chunk_stats_from_one_sample_of_sampler(sampler, cache_box[thread_id].seed);
   }
+  int n_samples = 1000000; /* these are per mpi process, distributed between threads  */ 
+  double* samples = (double*) malloc((size_t)n_samples * sizeof(double));
   // By persisting these variables rather than recreating them with each loop, we
   // 1. Get slightly better pseudo-randomness, I think, as the threads continue and we reduce our reliance on srand
   // 2. Become more slightly more efficient, as we don't have to call and free memory constantly 
 
-  int n_samples = 1000000; /* these are per mpi process, distributed between threads  */ 
-  double* samples = (double*) malloc((size_t)n_samples * sizeof(double));
   for(int i=0; ; i++){
     // Wait until the finisterrae allocator kills this
     
@@ -86,20 +112,12 @@ Chunk_stats sampler_finisterrae(double (*sampler)(uint64_t* seed)){
         #pragma omp for
         for (i = 0; i < n_samples; i++) {
             double samples[i] = sampler(&(cache_box[thread_id].seed));
-
-            /* 
-            Here we do something with results. 
-            Some cool ideas which are impractical: 
-            - Aggregate these sample by sample. It's a cool concept, but I think we loose too much floating point precision
-            - If we were *very* memory constrained, we could generate results once to get the mean, and then *generate them again from the same seed* to get the variance. 
-            - 
-            */
         }
     }
 
     // save stats to a struct so that they can be aggregated
     individual_mpi_process_stats->n_samples = n_samples;
-    individual_mpi_process_stats->mean = array_mean(xs, n_samples);
+    individual_mpi_process_stats->mean = array_mean(xs, n_samples); // we could also parallelize this 
     double var = 0.0;
     individual_mpi_process_stats->min = xs[0];
     individual_mpi_process_stats->max = xs[0];
@@ -119,7 +137,7 @@ Chunk_stats sampler_finisterrae(double (*sampler)(uint64_t* seed)){
     }
     */
 
-    MPI_Gather(&individual_mpi_process_stats, sizeof(Chunk_stats), MPI_CHAR, mpi_processes_stats_array, sizeof(Chunk_stats), MPI_CHAR, 0, MPI_COMM_WORLD);
+    MPI_Gather(&individual_mpi_process_stats, sizeof(Summary_stats), MPI_CHAR, mpi_processes_stats_array, sizeof(Summary_stats), MPI_CHAR, 0, MPI_COMM_WORLD);
 
     if (mpi_id==0) {
         reduce_chunk_stats(&aggregated_mpi_processes_stats, mpi_processes_stats_array, n_processes);
