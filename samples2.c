@@ -105,13 +105,13 @@ Summary_stats sampler_finisterrae(double (*sampler)(uint64_t* seed)){
     // sampler_parallel(sample_cost_effectiveness_cser_bps_per_million, samples, n_threads, n_samples, mpi_id+1+i*n_processes);
     // do this inline instead of calling to the sampler_parallel function
 
-    int i;
-    #pragma omp parallel private(i)
+    #pragma omp parallel for
     {
         int thread_id = omp_get_thread_num();
         #pragma omp for
-        for (i = 0; i < n_samples; i++) {
-            double samples[i] = sampler(&(cache_box[thread_id].seed));
+        for (int j = 0; j < n_samples; i++) {
+            // Can we get the minimum and maximum here? 
+            samples[j] = sampler(&(cache_box[thread_id].seed));
         }
     }
 
