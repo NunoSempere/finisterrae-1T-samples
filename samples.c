@@ -107,9 +107,9 @@ Summary_stats sampler_finisterrae(double (*sampler)(uint64_t* seed))
     Summary_stats* mpi_processes_stats_array = (Summary_stats*)malloc(n_processes * sizeof(Summary_stats));
     Summary_stats aggregated_mpi_processes_stats;
 
-    uint64_t* seed = malloc(sizeof(uint64_t)); *seed = UINT64_MAX / 2; double s = sampler(seed); free(seed);
     int* aggregate_histogram_bins = (int*)calloc((size_t)1000, sizeof(int));
     Histogram aggregate_histogram = { .min = 0, .max = 1000, .bin_width = 1, .n_bins = 1000, .bins = aggregate_histogram_bins };
+    uint64_t* seed = malloc(sizeof(uint64_t)); *seed = UINT64_MAX / 2; double s = sampler(seed); free(seed);
     aggregated_mpi_processes_stats = (Summary_stats) { .n_samples = 1, .min = s, .max = s, .mean = s, .variance = 0, .histogram = aggregate_histogram };
 
     // Get the number of threads
@@ -135,7 +135,7 @@ Summary_stats sampler_finisterrae(double (*sampler)(uint64_t* seed))
         // Nuño to Jorge: you can't do this in parallel, since rand() is not thread safe
         cache_box[thread_id].seed = (uint64_t)rand() * (UINT64_MAX / RAND_MAX);
     }
-    int n_samples = 1000000; /* these are per mpi process, distributed between threads  */
+    int n_samples = 10000000; /* these are per mpi process, distributed between threads  */
     double* xs = (double*)malloc((size_t)n_samples * sizeof(double));
     // By persisting these variables rather than recreating them with each loop, we
     // 1. Get slightly better pseudo-randomness, I think, as the threads continue and we reduce our reliance on srand
@@ -155,20 +155,18 @@ Summary_stats sampler_finisterrae(double (*sampler)(uint64_t* seed))
         }
 
         // save stats to a struct so that they can be aggregated
-        individual_mpi_process_stats.n_samples = n_samples;
-        individual_mpi_process_stats.mean = array_mean(xs, n_samples); // we could also parallelize this
-        double var = 0.0;
-        individual_mpi_process_stats.min = xs[0];
-        individual_mpi_process_stats.max = xs[0];
         int* individual_bins = (int*)calloc((size_t)1000, sizeof(int));
-        individual_mpi_process_stats.histogram = (Histogram) {
-            .min = 0,
-            .max = 1000,
-            .bin_width = 1,
-            .n_bins = 1000,
-            .bins = individual_bins,
+        Histogram individual_mpi_process_histogram = { .min = 0, .max = 1000, .bin_width = 1, .n_bins = 1000, .bins = individual_bins, };
+        individual_mpi_process_stats = (Summary_stats) { 
+            .n_samples = n_samples, 
+            .min = xs[0], 
+            .max = xs[0],
+            .mean = array_mean(xs, n_samples), 
+            .variance = 0,
+            .histogram = individual_mpi_process_histogram, 
         };
 
+        double var = 0.0;
         #pragma omp parallel for simd reduction(+:var) // unclear if the for simd reduction applies after we've added other items to the for loop
         for (uint64_t i = 0; i < n_samples; i++) {
             var += (xs[i] - individual_mpi_process_stats.mean) * (xs[i] - individual_mpi_process_stats.mean);
