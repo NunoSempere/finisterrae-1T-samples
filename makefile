@@ -1,11 +1,14 @@
-# CC=icc
-# CC=mpicc
-CC=gcc
+
+CC=mpicc
+OPTIMIZATION=-O3 -march=native 
+DEBUG=
+
+# For Linux:
+# CC=gcc
+# OPTIMIZATION=-O0
+# DEBUG=-g
+
 OUTPUT=./samples
-OPTIMIZATION=-O0
-# OPTIMIZATION=-O3 -march=native 
-DEBUG=-g
-# DEBUG=
 
 build:
 	$(CC) $(DEBUG) $(OPTIMIZATION) samples.c model.c ./squiggle_c/squiggle.c  ./squiggle_c/squiggle_more.c -lm -fopenmp -o $(OUTPUT)

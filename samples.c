@@ -8,7 +8,7 @@
 #include "model.h"
 
 /* Macro trick to be able to test part of the code in a system without MPI */
-#define NO_MPI
+// #define NO_MPI
 #ifdef NO_MPI
     #define IF_MPI(x)
     #define IF_NO_MPI(x) x
