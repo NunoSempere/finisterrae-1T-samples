@@ -8,6 +8,9 @@ build:
 build2:
 	$(CC) -O3 -march=native samples2.c model.c ./squiggle_c/squiggle.c  ./squiggle_c/squiggle_more.c -lm -fopenmp -o $(OUTPUT)
 
+lint:
+	clang-tidy samples2.c -- -lm 
+
 run:
 	$(OUTPUT)
 

@@ -84,7 +84,7 @@ Summary_stats sampler_finisterrae(double (*sampler)(uint64_t* seed)){
   // Function modelled after the sampler_parallel
 
   //START MPI ENVIRONMENT
-  int mpi_id, n_processes;
+  int mpi_id=1, n_processes=1;
   MPI_Status status;
   IF_MPI(MPI_Init(&argc, &argv));
   IF_MPI(MPI_Comm_size(MPI_COMM_WORLD, &n_processes));
