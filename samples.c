@@ -1,14 +1,15 @@
-#include "model.h"
-#include "squiggle_c/squiggle.h"
-#include "squiggle_c/squiggle_more.h"
 #include <float.h>
 #include <math.h>
 #include <omp.h>
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "squiggle_c/squiggle.h"
+#include "squiggle_c/squiggle_more.h"
+#include "model.h"
+
 /* Macro trick to be able to test part of the code in a system without MPI */
-// #define NO_MPI
+#define NO_MPI
 #ifdef NO_MPI
 #define IF_MPI(x)
 #define IF_NO_MPI(x) x
@@ -33,7 +34,7 @@ typedef struct _Histogram {
     double max;
     double interval_size;
     double* histogram_ticks;
-    double* histogram_counts;
+    int* counts;
 } Histogram;
 
 typedef struct _Summary_stats {
@@ -47,7 +48,6 @@ typedef struct _Summary_stats {
 
 Summary_stats get_chunk_stats_from_one_sample_of_sampler(double (*sampler)(uint64_t* seed), uint64_t* seed)
 {
-
     double s = sampler(seed);
     Summary_stats stats_of_one = { .n_samples = 1, .min = s, .max = s, .mean = s, .variance = 0 };
     return stats_of_one;
@@ -65,7 +65,6 @@ double combine_variances(Summary_stats* x, Summary_stats* y)
 
 void reduce_chunk_stats(Summary_stats* accumulator, Summary_stats* cs, int n_chunks)
 {
-
     double sum_weighted_means = accumulator->mean * accumulator->n_samples;
     for (int i = 0; i < n_chunks; i++) {
         sum_weighted_means += cs[i].mean * cs[i].n_samples;
@@ -75,7 +74,7 @@ void reduce_chunk_stats(Summary_stats* accumulator, Summary_stats* cs, int n_chu
         if (accumulator->min > cs[i].min) accumulator->min = cs[i].min;
         if (accumulator->max < cs[i].max) accumulator->max = cs[i].max;
         for (int j = 0; j < 1000; j++) {
-            accumulator->histogram.histogram_counts[j] += cs[i].histogram.histogram_counts[j];
+            accumulator->histogram.counts[j] += cs[i].histogram.counts[j];
         }
     }
     accumulator->mean = sum_weighted_means / accumulator->n_samples;
@@ -84,12 +83,12 @@ void reduce_chunk_stats(Summary_stats* accumulator, Summary_stats* cs, int n_chu
 void print_stats(Summary_stats* result)
 {
     printf("Result {\n  N_samples: %lu\n  Min:  %4.3lf\n  Max:  %4.3lf\n  Mean: %4.3lf\n  Var:  %4.3lf\n}\n", result->n_samples, result->min, result->max, result->mean, result->variance);
+
+    print_histogram(result->histogram.counts, 1000, 0.0, 1.0);
 }
 
 Summary_stats sampler_finisterrae(double (*sampler)(uint64_t* seed))
 {
-    // Function modelled after the sampler_parallel
-
     // START MPI ENVIRONMENT
     int mpi_id = 0, n_processes = 1;
     MPI_Status status;
@@ -97,20 +96,21 @@ Summary_stats sampler_finisterrae(double (*sampler)(uint64_t* seed))
     IF_MPI(MPI_Comm_size(MPI_COMM_WORLD, &n_processes));
     IF_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_id));
 
-    Summary_stats individual_mpi_process_stats; // each mpi process will have one of these
-    Summary_stats* mpi_processes_stats_array; // mpi will later aggregate them into one array
-    Summary_stats aggregated_mpi_processes_stats; // and we will reduce the array into one global stats again
+    /*
+    Three levels:
+    - individual_mpi_process_stats: each mpi process will have one of these
+    - mpi_processes_stats_array:  mpi will later aggregate them into one array
+    - aggregated_mpi_processes_stats: and we will reduce the array into one global stats again
+    */
 
-    mpi_processes_stats_array = (Summary_stats*)malloc(n_processes * sizeof(Summary_stats));
-    // Use a seed to initialize this global variable
-    uint64_t* seed = malloc(sizeof(uint64_t));
-    *seed = UINT64_MAX / 2;
-    double s = sampler(seed);
-    double* histogram_counts = (double*)calloc((size_t)1000, sizeof(double));
-    Histogram aggregate_histogram = { .min = 0, .max = 1000, .interval_size = 1, .histogram_counts = histogram_counts };
-    Summary_stats _aggregated_mpi_processes_stats = { .n_samples = 1, .min = s, .max = s, .mean = s, .variance = 0, .histogram = aggregate_histogram };
-    aggregated_mpi_processes_stats = _aggregated_mpi_processes_stats;
-    free(seed);
+    Summary_stats individual_mpi_process_stats;
+    Summary_stats* mpi_processes_stats_array = (Summary_stats*)malloc(n_processes * sizeof(Summary_stats));
+    Summary_stats aggregated_mpi_processes_stats;
+
+    uint64_t* seed = malloc(sizeof(uint64_t)); *seed = UINT64_MAX / 2; double s = sampler(seed); free(seed);
+    int* aggregate_histogram_counts = (int*)calloc((size_t)1000, sizeof(int));
+    Histogram aggregate_histogram = { .min = 0, .max = 1000, .interval_size = 1, .counts = aggregate_histogram_counts };
+    aggregated_mpi_processes_stats = (Summary_stats) { .n_samples = 1, .min = s, .max = s, .mean = s, .variance = 0, .histogram = aggregate_histogram };
 
     // Get the number of threads
     int n_threads;
@@ -150,7 +150,7 @@ Summary_stats sampler_finisterrae(double (*sampler)(uint64_t* seed))
         #pragma omp parallel for
         for (int j = 0; j < n_samples; j++) {
             int thread_id = omp_get_thread_num();
-            // Can we get the minimum and maximum here?
+            // Can we get the minimum and maximum here? Not quite straightforwardly, because we have different threads operating independently
             xs[j] = sampler(&(cache_box[thread_id].seed));
         }
 
@@ -160,14 +160,13 @@ Summary_stats sampler_finisterrae(double (*sampler)(uint64_t* seed))
         double var = 0.0;
         individual_mpi_process_stats.min = xs[0];
         individual_mpi_process_stats.max = xs[0];
-        double* individual_histogram_counts = (double*)calloc((size_t)1000, sizeof(double));
-        Histogram _histogram = {
+        int* individual_counts = (int*)calloc((size_t)1000, sizeof(int));
+        individual_mpi_process_stats.histogram = (Histogram) {
             .min = 0,
             .max = 1000,
             .interval_size = 1,
-            .histogram_counts = individual_histogram_counts,
+            .counts = individual_counts,
         };
-        individual_mpi_process_stats.histogram = _histogram;
 
         #pragma omp parallel for simd reduction(+:var) // unclear if the for simd reduction applies after we've added other items to the for loop
         for (uint64_t i = 0; i < n_samples; i++) {
@@ -178,7 +177,7 @@ Summary_stats sampler_finisterrae(double (*sampler)(uint64_t* seed))
                 printf("xs[i] outside histogram domain: %lf", xs[i]);
             } else {
                 double rounded = floor(xs[i]);
-                individual_mpi_process_stats.histogram.histogram_counts[(int)rounded]++;
+                individual_mpi_process_stats.histogram.counts[(int)rounded]++;
             }
         }
         individual_mpi_process_stats.variance = var / n_samples;

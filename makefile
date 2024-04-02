@@ -1,12 +1,12 @@
 
-CC=mpicc
-OPTIMIZATION=-O3 -march=native 
-DEBUG=
+# CC=mpicc
+# OPTIMIZATION=-O3 -march=native 
+# DEBUG=
 
 # For Linux:
-# CC=gcc
-# OPTIMIZATION=-O0
-# DEBUG=-g
+CC=gcc
+OPTIMIZATION=-O0
+DEBUG=-g
 
 OUTPUT=./samples
 
