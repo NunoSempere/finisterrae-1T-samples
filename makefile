@@ -1,9 +1,14 @@
-OUTPUT=./samples
 # CC=icc
 # CC=mpicc
 CC=gcc
+OUTPUT=./samples
+OPTIMIZATION=-O0
+# OPTIMIZATION=-O3 -march=native 
+DEBUG=-g
+# DEBUG=
+
 build:
-	$(CC) -O3 -march=native samples.c model.c ./squiggle_c/squiggle.c  ./squiggle_c/squiggle_more.c -lm -fopenmp -o $(OUTPUT)
+	$(CC) $(DEBUG) $(OPTIMIZATION) samples.c model.c ./squiggle_c/squiggle.c  ./squiggle_c/squiggle_more.c -lm -fopenmp -o $(OUTPUT)
 
 lint:
 	clang-tidy samples.c -- -lm 

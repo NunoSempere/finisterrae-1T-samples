@@ -11,10 +11,12 @@
 #define NO_MPI
 #ifdef NO_MPI
     #define IF_MPI(x)
+    #define IF_NO_MPI(x) x
     #define MPI_Status int
 #else
     #include "mpi.h" /* N: why is this "mpi.h" and not <mpi.h> ??? */
     #define IF_MPI(x) x
+    #define IF_NO_MPI(x)
 #endif
 
 /* Structs */
@@ -50,7 +52,7 @@ Summary_stats get_chunk_stats_from_one_sample_of_sampler(double (*sampler)(uint6
   return stats_of_one; 
 }
 
-inline double combine_variances (Summary_stats *x, Summary_stats *y) {
+double combine_variances (Summary_stats *x, Summary_stats *y) {
     double term1 = ((x->n_samples) * x->variance + (y->n_samples)*y->variance)/(x->n_samples + y->n_samples) ;
     double term2 = (x->n_samples * y->n_samples * (x->mean - y->mean)*(x->mean - y->mean)) / ((x->n_samples + y->n_samples) * (x->n_samples + y->n_samples));
     double result = term1 + term2;
@@ -181,6 +183,7 @@ Summary_stats sampler_finisterrae(double (*sampler)(uint64_t* seed)){
     */
 
     IF_MPI(MPI_Gather(&individual_mpi_process_stats, sizeof(Summary_stats), MPI_CHAR, mpi_processes_stats_array, sizeof(Summary_stats), MPI_CHAR, 0, MPI_COMM_WORLD));
+    IF_NO_MPI(mpi_processes_stats_array[0] = individual_mpi_process_stats);
 
     if (mpi_id==0) {
         reduce_chunk_stats(&aggregated_mpi_processes_stats, mpi_processes_stats_array, n_processes);
