@@ -10,17 +10,23 @@ DEBUG=
 
 OUTPUT=./samples
 
+STYLE_BLUEPRINT="{BasedOnStyle: webkit, AllowShortIfStatementsOnASingleLine: true}" 
+FORMATTER=clang-format -i -style=$(STYLE_BLUEPRINT)
+
 build:
 	$(CC) $(DEBUG) $(OPTIMIZATION) samples.c model.c ./squiggle_c/squiggle.c  ./squiggle_c/squiggle_more.c -lm -fopenmp -o $(OUTPUT)
-
-lint:
-	clang-tidy samples.c -- -lm 
 
 run:
 	$(OUTPUT)
 
 save:
 	$(OUTPUT) > output.txt
+
+lint:
+	clang-tidy samples.c -- -lm 
+
+format: 
+	$(FORMATTER) samples.c 
 
 save-time:
 	/bin/time -f "\nTime taken: %es" ./samples > output.txt 2>&1 && cat output.txt
