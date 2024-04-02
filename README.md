@@ -30,3 +30,14 @@ This folder contains code to run the CSER squiggle.c model on the Finisterrae su
 - [ ] Have a single sample_mpi function
   - Draw sample and chunkify at the same time, rather than in two loops
 - [ ] Histogram code
+
+---
+
+Notes on histogram.
+
+- As a linked list? Easier to expand, but O(n) access time 
+- As an array with some structure
+  - Much more annoying to expand
+  - Constant time access
+- Make histogram with constant ticks but very wide and later expand?
+  - Give error if it exceeds those bounds?

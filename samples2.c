@@ -8,12 +8,21 @@
 #include <omp.h>
 #include "model.h"
 
+typedef struct _Histogram {
+  double min;
+  double max;
+  double interval_size;
+  double* histogram_ticks;
+  double* histogram_counts;
+} Histogram;
+
 typedef struct _Summary_stats {
     uint64_t n_samples;
     double min;
     double max;
     double mean;
     double variance;
+    Histogram histogram;
 } Summary_stats;
 
 Summary_stats get_chunk_stats_from_one_sample_of_sampler(double (*sampler)(uint64_t* seed), uint64_t* seed){
@@ -42,6 +51,9 @@ void reduce_chunk_stats (Summary_stats* accumulator, Summary_stats* cs, int n_ch
         accumulator->variance = combine_variances(accumulator, cs+i);
         if(accumulator->min > cs[i].min) accumulator->min = cs[i].min;
         if(accumulator->max < cs[i].max) accumulator->max = cs[i].max;
+        for(int j=0; j<1000; j++){
+          accumulator->histogram->histogram_counts[j]+= cs[i]->histogram->histogram_counts[j];
+        }
     }
     accumulator->mean = sum_weighted_means / accumulator->n_samples;
 }
@@ -68,7 +80,9 @@ Summary_stats sampler_finisterrae(double (*sampler)(uint64_t* seed)){
   // Use a seed to initialize this global variable
   uint64_t* seed = malloc(sizeof(uint64_t));
   *seed = UINT64_MAX/2;
-  aggregated_mpi_processes_stats = get_chunk_stats_from_one_sample_of_sampler(sampler, cache_box[0].seed); 
+  double s = sampler(seed);
+  Histogram aggregate_histogram = { .min = 0; max = 1000; .interval_size = 1; histogram_counts =(double*) calloc((size_t) 1000, sizeof(double));}
+  aggregated_mpi_processes_stats = {.n_samples=1, .min=s , .max=s , .mean=s, .variance=0, .histogram=aggregate_histogram };
   free(seed);
 
   // Get the number of threads
@@ -94,7 +108,7 @@ Summary_stats sampler_finisterrae(double (*sampler)(uint64_t* seed)){
     cache_box[thread_id].seed = (uint64_t)rand() * (UINT64_MAX / RAND_MAX);
   }
   int n_samples = 1000000; /* these are per mpi process, distributed between threads  */ 
-  double* samples = (double*) malloc((size_t)n_samples * sizeof(double));
+  double* xs = (double*) malloc((size_t)n_samples * sizeof(double));
   // By persisting these variables rather than recreating them with each loop, we
   // 1. Get slightly better pseudo-randomness, I think, as the threads continue and we reduce our reliance on srand
   // 2. Become more slightly more efficient, as we don't have to call and free memory constantly 
@@ -111,7 +125,7 @@ Summary_stats sampler_finisterrae(double (*sampler)(uint64_t* seed)){
         #pragma omp for
         for (int j = 0; j < n_samples; i++) {
             // Can we get the minimum and maximum here? 
-            samples[j] = sampler(&(cache_box[thread_id].seed));
+            xs[j] = sampler(&(cache_box[thread_id].seed));
         }
     }
 
@@ -121,11 +135,19 @@ Summary_stats sampler_finisterrae(double (*sampler)(uint64_t* seed)){
     double var = 0.0;
     individual_mpi_process_stats->min = xs[0];
     individual_mpi_process_stats->max = xs[0];
-    #pragma omp parallel for simd reduction(+:var)
+    individual_mpi_process_stats->histogram = { .min = 0; max = 1000; .interval_size = 1; histogram_counts =(double*) calloc((size_t) 1000, sizeof(double));}
+    #pragma omp parallel for simd reduction(+:var) // unclear if the for simd reduction applies after we've added other items to the for loop
     for (uint64_t i = 0; i < n_samples; i++) {
         var += (xs[i] - individual_mpi_process_stats->mean) * (xs[i] - individual_mpi_process_stats->mean);
         if(individual_mpi_process_stats->min > xs[i]) individual_mpi_process_stats->min = xs[i];
         if(individual_mpi_process_stats->max < xs[i]) individual_mpi_process_stats->max = xs[i];
+        if(xs[i] < individual_mpi_process_stats->histogram->min || xs[i] > individual_mpi_process_stats->histogram->max){
+          printf("xs[i] outside histogram domain: %lf", xs[i]);
+        }else {
+          double rounded = floor(xs[i]);
+          individual_mpi_process_stats->histogram->histogram_counts[(int) rounded]++;
+          
+        }
     }
     individual_mpi_process_stats->variance = var / n_samples;
 
