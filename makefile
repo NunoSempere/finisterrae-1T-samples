@@ -11,7 +11,7 @@ DEBUG=
 OUTPUT=./samples
 
 STYLE_BLUEPRINT="{BasedOnStyle: webkit, AllowShortIfStatementsOnASingleLine: true}" 
-FORMATTER=clang-format -i -style=$(STYLE_BLUEPRINT)
+FORMATTER=clang-format -i -style=$(STYLE_BLUEPRINT) 
 
 build:
 	$(CC) $(DEBUG) $(OPTIMIZATION) samples.c model.c ./squiggle_c/squiggle.c  ./squiggle_c/squiggle_more.c -lm -fopenmp -o $(OUTPUT)

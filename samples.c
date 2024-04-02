@@ -114,8 +114,8 @@ Summary_stats sampler_finisterrae(double (*sampler)(uint64_t* seed))
 
     // Get the number of threads
     int n_threads;
-#pragma omp parallel /* N: I don't quite understand what this directive is doing. */
-#pragma omp single
+    #pragma omp parallel /* N: I don't quite understand what this directive is doing. */
+    #pragma omp single
     {
         n_threads = omp_get_num_threads();
         // printf("Num threads on process %d: %d\n", mpi_id, n_threads);
@@ -147,7 +147,7 @@ Summary_stats sampler_finisterrae(double (*sampler)(uint64_t* seed))
         // sampler_parallel(sample_cost_effectiveness_cser_bps_per_million, samples, n_threads, n_samples, mpi_id+1+i*n_processes);
         // do this inline instead of calling to the sampler_parallel function
 
-#pragma omp parallel for
+        #pragma omp parallel for
         for (int j = 0; j < n_samples; j++) {
             int thread_id = omp_get_thread_num();
             // Can we get the minimum and maximum here?
@@ -169,7 +169,7 @@ Summary_stats sampler_finisterrae(double (*sampler)(uint64_t* seed))
         };
         individual_mpi_process_stats.histogram = _histogram;
 
-#pragma omp parallel for simd reduction(+:var) // unclear if the for simd reduction applies after we've added other items to the for loop
+        #pragma omp parallel for simd reduction(+:var) // unclear if the for simd reduction applies after we've added other items to the for loop
         for (uint64_t i = 0; i < n_samples; i++) {
             var += (xs[i] - individual_mpi_process_stats.mean) * (xs[i] - individual_mpi_process_stats.mean);
             if (individual_mpi_process_stats.min > xs[i]) individual_mpi_process_stats.min = xs[i];
