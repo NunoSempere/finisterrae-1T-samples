@@ -32,9 +32,9 @@ typedef struct _seed_cache_box {
 typedef struct _Histogram {
     double min;
     double max;
-    double interval_size;
-    double* histogram_ticks;
-    int* counts;
+    double bin_width;
+    double n_bins;
+    int* bins;
 } Histogram;
 
 typedef struct _Summary_stats {
@@ -73,8 +73,8 @@ void reduce_chunk_stats(Summary_stats* accumulator, Summary_stats* cs, int n_chu
         accumulator->variance = combine_variances(accumulator, cs + i);
         if (accumulator->min > cs[i].min) accumulator->min = cs[i].min;
         if (accumulator->max < cs[i].max) accumulator->max = cs[i].max;
-        for (int j = 0; j < 1000; j++) {
-            accumulator->histogram.counts[j] += cs[i].histogram.counts[j];
+        for (int j = 0; j < accumulator->histogram.n_bins; j++) {
+            accumulator->histogram.bins[j] += cs[i].histogram.bins[j];
         }
     }
     accumulator->mean = sum_weighted_means / accumulator->n_samples;
@@ -84,7 +84,7 @@ void print_stats(Summary_stats* result)
 {
     printf("Result {\n  N_samples: %lu\n  Min:  %4.3lf\n  Max:  %4.3lf\n  Mean: %4.3lf\n  Var:  %4.3lf\n}\n", result->n_samples, result->min, result->max, result->mean, result->variance);
 
-    print_histogram(result->histogram.counts, 1000, 0.0, 1.0);
+    print_histogram(result->histogram.bins, result->histogram.n_bins, result->histogram.min, result->histogram.bin_width);
 }
 
 Summary_stats sampler_finisterrae(double (*sampler)(uint64_t* seed))
@@ -108,8 +108,8 @@ Summary_stats sampler_finisterrae(double (*sampler)(uint64_t* seed))
     Summary_stats aggregated_mpi_processes_stats;
 
     uint64_t* seed = malloc(sizeof(uint64_t)); *seed = UINT64_MAX / 2; double s = sampler(seed); free(seed);
-    int* aggregate_histogram_counts = (int*)calloc((size_t)1000, sizeof(int));
-    Histogram aggregate_histogram = { .min = 0, .max = 1000, .interval_size = 1, .counts = aggregate_histogram_counts };
+    int* aggregate_histogram_bins = (int*)calloc((size_t)1000, sizeof(int));
+    Histogram aggregate_histogram = { .min = 0, .max = 1000, .bin_width = 1, .n_bins = 1000, .bins = aggregate_histogram_bins };
     aggregated_mpi_processes_stats = (Summary_stats) { .n_samples = 1, .min = s, .max = s, .mean = s, .variance = 0, .histogram = aggregate_histogram };
 
     // Get the number of threads
@@ -160,12 +160,13 @@ Summary_stats sampler_finisterrae(double (*sampler)(uint64_t* seed))
         double var = 0.0;
         individual_mpi_process_stats.min = xs[0];
         individual_mpi_process_stats.max = xs[0];
-        int* individual_counts = (int*)calloc((size_t)1000, sizeof(int));
+        int* individual_bins = (int*)calloc((size_t)1000, sizeof(int));
         individual_mpi_process_stats.histogram = (Histogram) {
             .min = 0,
             .max = 1000,
-            .interval_size = 1,
-            .counts = individual_counts,
+            .bin_width = 1,
+            .n_bins = 1000,
+            .bins = individual_bins,
         };
 
         #pragma omp parallel for simd reduction(+:var) // unclear if the for simd reduction applies after we've added other items to the for loop
@@ -177,7 +178,7 @@ Summary_stats sampler_finisterrae(double (*sampler)(uint64_t* seed))
                 printf("xs[i] outside histogram domain: %lf", xs[i]);
             } else {
                 double rounded = floor(xs[i]);
-                individual_mpi_process_stats.histogram.counts[(int)rounded]++;
+                individual_mpi_process_stats.histogram.bins[(int)rounded]++;
             }
         }
         individual_mpi_process_stats.variance = var / n_samples;
