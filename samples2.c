@@ -4,10 +4,19 @@
 #include <stdlib.h>
 #include <float.h>
 #include <math.h>
-#include "mpi.h" /* N: why is this "mpi.h" and not <mpi.h> ??? */
 #include <omp.h>
 #include "model.h"
 
+/* Macro trick to be able to test part of the code in a system without MPI */
+#define NO_MPI
+#ifdef NO_MPI
+    #define IF_MPI(x)
+#else
+    #include "mpi.h" /* N: why is this "mpi.h" and not <mpi.h> ??? */
+    #define IF_MPI(x) x
+#endif
+
+/* Structs */
 typedef struct _Histogram {
   double min;
   double max;
@@ -67,10 +76,10 @@ Summary_stats sampler_finisterrae(double (*sampler)(uint64_t* seed)){
 
   //START MPI ENVIRONMENT
   int mpi_id, n_processes;
-  MPI_Status status;
-  MPI_Init(&argc, &argv);
-  MPI_Comm_size(MPI_COMM_WORLD, &n_processes);
-  MPI_Comm_rank(MPI_COMM_WORLD, &mpi_id);
+  IF_MPI(MPI_Status status));
+  IF_MPI(MPI_Init(&argc, &argv));
+  IF_MPI(MPI_Comm_size(MPI_COMM_WORLD, &n_processes));
+  IF_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_id));
 
   Summary_stats individual_mpi_process_stats;   // each mpi process will have one of these
   Summary_stats* mpi_processes_stats_array;     // mpi will later aggregate them into one array
@@ -159,7 +168,7 @@ Summary_stats sampler_finisterrae(double (*sampler)(uint64_t* seed)){
     }
     */
 
-    MPI_Gather(&individual_mpi_process_stats, sizeof(Summary_stats), MPI_CHAR, mpi_processes_stats_array, sizeof(Summary_stats), MPI_CHAR, 0, MPI_COMM_WORLD);
+    IF_MPI(MPI_Gather(&individual_mpi_process_stats, sizeof(Summary_stats), MPI_CHAR, mpi_processes_stats_array, sizeof(Summary_stats), MPI_CHAR, 0, MPI_COMM_WORLD));
 
     if (mpi_id==0) {
         reduce_chunk_stats(&aggregated_mpi_processes_stats, mpi_processes_stats_array, n_processes);
@@ -173,6 +182,6 @@ Summary_stats sampler_finisterrae(double (*sampler)(uint64_t* seed)){
 
 
 int main(int argc,char **argv){
-  sampler_finisterrae();
+  sampler_finisterrae(sample_cost_effectiveness_cser_bps_per_million);
   return 0;
 }

@@ -1,8 +1,12 @@
 OUTPUT=./samples
 # CC=icc
-CC=mpicc #gcc
+# CC=mpicc
+CC=gcc
 build:
 	$(CC) -O3 -march=native samples.c model.c ./squiggle_c/squiggle.c  ./squiggle_c/squiggle_more.c -lm -fopenmp -o $(OUTPUT)
+
+build2:
+	$(CC) -O3 -march=native samples2.c model.c ./squiggle_c/squiggle.c  ./squiggle_c/squiggle_more.c -lm -fopenmp -o $(OUTPUT)
 
 run:
 	$(OUTPUT)
