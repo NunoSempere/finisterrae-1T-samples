@@ -56,6 +56,7 @@ typedef struct _Finisterrae_params {
     const double histogram_n_bins;
 } Finisterrae_params;
 
+/* Helpers */
 double combine_variances(Summary_stats* x, Summary_stats* y)
 {
     double term1 = ((x->n_samples) * x->variance + (y->n_samples) * y->variance) / (x->n_samples + y->n_samples);
@@ -111,8 +112,8 @@ Summary_stats sampler_finisterrae(Finisterrae_params finisterrae)
     Summary_stats* mpi_processes_stats_array = (Summary_stats*)malloc(n_processes * sizeof(Summary_stats));
     Summary_stats aggregated_mpi_processes_stats;
 
-    int* aggregate_histogram_bins = (int*)calloc((size_t)1000, sizeof(int));
-    Histogram aggregate_histogram = { .min = 0, .max = 1000, .bin_width = 1, .n_bins = 1000, .bins = aggregate_histogram_bins };
+    int* aggregate_histogram_bins = (int*)calloc((size_t) finisterrae.histogram_n_bins, sizeof(int));
+    Histogram aggregate_histogram = { .min = finisterrae.histogram_min, .max = finisterrae.histogram_max, .bin_width = finisterrae.histogram_bin_width, .n_bins = finisterrae.histogram_n_bins, .bins = aggregate_histogram_bins };
     uint64_t* seed = malloc(sizeof(uint64_t)); *seed = UINT64_MAX / 2; double s = finisterrae.sampler(seed); free(seed);
     aggregated_mpi_processes_stats = (Summary_stats) { .n_samples = 1, .min = s, .max = s, .mean = s, .variance = 0, .histogram = aggregate_histogram };
 
@@ -160,8 +161,8 @@ Summary_stats sampler_finisterrae(Finisterrae_params finisterrae)
         }
 
         // Initialize individual process stats struct
-        int* individual_bins = (int*)calloc((size_t)1000, sizeof(int));
-        Histogram individual_mpi_process_histogram = { .min = 0, .max = 1000, .bin_width = 1, .n_bins = 1000, .bins = individual_bins, };
+        int* individual_bins = (int*)calloc((size_t)finisterrae.histogram_n_bins, sizeof(int));
+        Histogram individual_mpi_process_histogram = { .min = finisterrae.histogram_min, .max = finisterrae.histogram_max, .bin_width = finisterrae.histogram_bin_width, .n_bins = finisterrae.histogram_n_bins, .bins = individual_bins, };
         individual_mpi_process_stats = (Summary_stats) { 
             .n_samples = n_samples, 
             .min = xs[0], 
