@@ -8,20 +8,21 @@
 #include "squiggle_c/squiggle_more.h"
 #include "model.h"
 
-/* Macro trick to be able to test part of the code in a system without MPI */
-#define NO_MPI
+/* Macro to be able to run part of the code in a system without MPI */
+#define NO_MPI // Comment out if running on an MPI system
 #ifdef NO_MPI
-#define IF_MPI(x)
-#define IF_NO_MPI(x) x
-#define MPI_Status int
+    #define IF_MPI(x)
+    #define IF_NO_MPI(x) x
+    #define MPI_Status int
+    #define NUM_SAMPLES 1000000
 #else
-#include "mpi.h" /* N: why is this "mpi.h" and not <mpi.h> ??? */
-#define IF_MPI(x) x
-#define IF_NO_MPI(x)
+    #include "mpi.h" /* N: why is this "mpi.h" and not <mpi.h> ??? */
+    #define IF_MPI(x) x
+    #define IF_NO_MPI(x)
+    #define NUM_SAMPLES 1000000000
 #endif
 
 /* Structs */
-
 #define CACHE_LINE_SIZE 64
 typedef struct _seed_cache_box {
     uint64_t seed;
@@ -46,13 +47,6 @@ typedef struct _Summary_stats {
     Histogram histogram;
 } Summary_stats;
 
-Summary_stats get_chunk_stats_from_one_sample_of_sampler(double (*sampler)(uint64_t* seed), uint64_t* seed)
-{
-    double s = sampler(seed);
-    Summary_stats stats_of_one = { .n_samples = 1, .min = s, .max = s, .mean = s, .variance = 0 };
-    return stats_of_one;
-}
-
 double combine_variances(Summary_stats* x, Summary_stats* y)
 {
     double term1 = ((x->n_samples) * x->variance + (y->n_samples) * y->variance) / (x->n_samples + y->n_samples);
@@ -63,18 +57,18 @@ double combine_variances(Summary_stats* x, Summary_stats* y)
     // but use the standard deviation of the samples, no the estimate of the standard deviation of the underlying distribution
 }
 
-void reduce_chunk_stats(Summary_stats* accumulator, Summary_stats* cs, int n_chunks)
+void reduce_chunk_stats(Summary_stats* accumulator, Summary_stats* new, int n_chunks)
 {
     double sum_weighted_means = accumulator->mean * accumulator->n_samples;
     for (int i = 0; i < n_chunks; i++) {
-        sum_weighted_means += cs[i].mean * cs[i].n_samples;
-        accumulator->n_samples += cs[i].n_samples;
+        sum_weighted_means += new[i].mean * new[i].n_samples;
+        accumulator->n_samples += new[i].n_samples;
         accumulator->mean = sum_weighted_means / accumulator->n_samples; // need this for the variance calculations
-        accumulator->variance = combine_variances(accumulator, cs + i);
-        if (accumulator->min > cs[i].min) accumulator->min = cs[i].min;
-        if (accumulator->max < cs[i].max) accumulator->max = cs[i].max;
+        accumulator->variance = combine_variances(accumulator, new + i);
+        if (accumulator->min > new[i].min) accumulator->min = new[i].min;
+        if (accumulator->max < new[i].max) accumulator->max = new[i].max;
         for (int j = 0; j < accumulator->histogram.n_bins; j++) {
-            accumulator->histogram.bins[j] += cs[i].histogram.bins[j];
+            accumulator->histogram.bins[j] += new[i].histogram.bins[j];
         }
     }
     accumulator->mean = sum_weighted_means / accumulator->n_samples;
@@ -135,7 +129,7 @@ Summary_stats sampler_finisterrae(double (*sampler)(uint64_t* seed))
         // Nuño to Jorge: you can't do this in parallel, since rand() is not thread safe
         cache_box[thread_id].seed = (uint64_t)rand() * (UINT64_MAX / RAND_MAX);
     }
-    int n_samples = 10000000; /* these are per mpi process, distributed between threads  */
+    int n_samples = NUM_SAMPLES; /* these are per mpi process, distributed between threads  */
     double* xs = (double*)malloc((size_t)n_samples * sizeof(double));
     // By persisting these variables rather than recreating them with each loop, we
     // 1. Get slightly better pseudo-randomness, I think, as the threads continue and we reduce our reliance on srand
@@ -147,6 +141,7 @@ Summary_stats sampler_finisterrae(double (*sampler)(uint64_t* seed))
         // sampler_parallel(sample_cost_effectiveness_cser_bps_per_million, samples, n_threads, n_samples, mpi_id+1+i*n_processes);
         // do this inline instead of calling to the sampler_parallel function
 
+        // One parallel loop to get the samples
         #pragma omp parallel for
         for (int j = 0; j < n_samples; j++) {
             int thread_id = omp_get_thread_num();
@@ -154,26 +149,24 @@ Summary_stats sampler_finisterrae(double (*sampler)(uint64_t* seed))
             xs[j] = sampler(&(cache_box[thread_id].seed));
         }
 
-        // save stats to a struct so that they can be aggregated
+        // Initialize individual process stats struct
         int* individual_bins = (int*)calloc((size_t)1000, sizeof(int));
         Histogram individual_mpi_process_histogram = { .min = 0, .max = 1000, .bin_width = 1, .n_bins = 1000, .bins = individual_bins, };
         individual_mpi_process_stats = (Summary_stats) { 
             .n_samples = n_samples, 
             .min = xs[0], 
             .max = xs[0],
-            .mean = array_mean(xs, n_samples), 
+            .mean = 0.0, 
             .variance = 0.0,
             .histogram = individual_mpi_process_histogram, 
         };
 
-        double var = 0.0;
-        #pragma omp parallel for simd reduction(+:var) // unclear if the for simd reduction applies after we've added other items to the for loop
-        for (int i = 0; i < n_samples; i++) {
-            var += (xs[i] - individual_mpi_process_stats.mean) * (xs[i] - individual_mpi_process_stats.mean);
-        }
-        individual_mpi_process_stats.variance = var / n_samples;
-
+        // One serial loop for mean, min, max & histogram
+        // Possibly, these could be done more efficiently with openmp reductions, 
+        // but I don't quite understand them 
+        double mean = 0.0;
         for (int i = 0; i < n_samples; i++) { // do this serially to avoid race conditions 
+            mean += xs[i];
             if (individual_mpi_process_stats.min > xs[i]) individual_mpi_process_stats.min = xs[i];
             if (individual_mpi_process_stats.max < xs[i]) individual_mpi_process_stats.max = xs[i];
             if (xs[i] < individual_mpi_process_stats.histogram.min || xs[i] > individual_mpi_process_stats.histogram.max) {
@@ -183,6 +176,15 @@ Summary_stats sampler_finisterrae(double (*sampler)(uint64_t* seed))
                 individual_mpi_process_stats.histogram.bins[(int)rounded]++;
             }
         }
+        individual_mpi_process_stats.mean = mean/n_samples;
+
+        // One parallel loop for variance
+        double var = 0.0;
+        #pragma omp parallel for simd reduction(+:var) // unclear if the for simd reduction applies after we've added other items to the for loop
+        for (int i = 0; i < n_samples; i++) {
+            var += (xs[i] - individual_mpi_process_stats.mean) * (xs[i] - individual_mpi_process_stats.mean);
+        }
+        individual_mpi_process_stats.variance = var / n_samples;
 
         /*
         for (int i=0; i<n_processes; i++){
