@@ -14,12 +14,12 @@
     #define IF_MPI(x)
     #define IF_NO_MPI(x) x
     #define MPI_Status int
-    #define NUM_SAMPLES 1000000
+    #define N_SAMPLES_PER_PROCESS 1000000
 #else
     #include "mpi.h" /* N: why is this "mpi.h" and not <mpi.h> ??? */
     #define IF_MPI(x) x
     #define IF_NO_MPI(x)
-    #define NUM_SAMPLES 1000000000
+    #define N_SAMPLES_PER_PROCESS 1000000000
 #endif
 
 /* Structs */
@@ -46,6 +46,15 @@ typedef struct _Summary_stats {
     double variance;
     Histogram histogram;
 } Summary_stats;
+
+typedef struct _Finisterrae_params {
+    double (*sampler)(uint64_t* seed);
+    int n_samples_per_process;
+    double histogram_min;
+    double histogram_max;
+    double histogram_bin_width;
+    double histogram_n_bins;
+} Finisterrae_params;
 
 double combine_variances(Summary_stats* x, Summary_stats* y)
 {
@@ -81,8 +90,9 @@ void print_stats(Summary_stats* result)
     print_histogram(result->histogram.bins, result->histogram.n_bins, result->histogram.min, result->histogram.bin_width);
 }
 
-Summary_stats sampler_finisterrae(double (*sampler)(uint64_t* seed))
+Summary_stats sampler_finisterrae(double (*sampler)(uint64_t* seed), int n_samples_per_process)
 {
+    // Histogram parameters: histogram_min, histogram_max
     // START MPI ENVIRONMENT
     int mpi_id = 0, n_processes = 1;
     MPI_Status status;
@@ -129,7 +139,7 @@ Summary_stats sampler_finisterrae(double (*sampler)(uint64_t* seed))
         // Nuño to Jorge: you can't do this in parallel, since rand() is not thread safe
         cache_box[thread_id].seed = (uint64_t)rand() * (UINT64_MAX / RAND_MAX);
     }
-    int n_samples = NUM_SAMPLES; /* these are per mpi process, distributed between threads  */
+    int n_samples = n_samples_per_process; /* these are per mpi process, distributed between threads  */
     double* xs = (double*)malloc((size_t)n_samples * sizeof(double));
     // By persisting these variables rather than recreating them with each loop, we
     // 1. Get slightly better pseudo-randomness, I think, as the threads continue and we reduce our reliance on srand
@@ -169,11 +179,12 @@ Summary_stats sampler_finisterrae(double (*sampler)(uint64_t* seed))
             mean += xs[i];
             if (individual_mpi_process_stats.min > xs[i]) individual_mpi_process_stats.min = xs[i];
             if (individual_mpi_process_stats.max < xs[i]) individual_mpi_process_stats.max = xs[i];
-            if (xs[i] < individual_mpi_process_stats.histogram.min || xs[i] > individual_mpi_process_stats.histogram.max) {
+            if (xs[i] < individual_mpi_process_stats.histogram.min || xs[i] >= individual_mpi_process_stats.histogram.max) {
                 printf("xs[i] outside histogram domain: %lf", xs[i]);
             } else {
-                double rounded = floor(xs[i]);
-                individual_mpi_process_stats.histogram.bins[(int)rounded]++;
+                double bin_double = (xs[i] - individual_mpi_process_stats.histogram.min)/individual_mpi_process_stats.histogram.bin_width;
+                int bin_int = (int) floor(bin_double);
+                individual_mpi_process_stats.histogram.bins[bin_int]++;
             }
         }
         individual_mpi_process_stats.mean = mean/n_samples;
@@ -208,6 +219,6 @@ Summary_stats sampler_finisterrae(double (*sampler)(uint64_t* seed))
 
 int main(int argc, char** argv)
 {
-    sampler_finisterrae(sample_cost_effectiveness_cser_bps_per_million);
+    sampler_finisterrae(sample_cost_effectiveness_cser_bps_per_million, N_SAMPLES_PER_PROCESS);
     return 0;
 }

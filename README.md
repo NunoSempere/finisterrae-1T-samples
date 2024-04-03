@@ -20,6 +20,17 @@ This folder contains code to run the CSER squiggle.c model on the Finisterrae su
     - Qué es npes?
     - [x] To do: change combination of means
     - [x] To do: get one sample for initial combination
+- [x] Have a single sample_mpi function
+  - Draw sample and chunkify at the same time, rather than in two loops
+- [x] Histogram code.
+    - Some options:
+    - As a linked list? Easier to expand, but O(n) access time 
+    - As an array with some structure <= this would be the sophisticated way to go about this
+      - Much more annoying to expand
+      - Constant time access
+    - [x] Make histogram with constant ticks but very wide and later expand?
+      - Give error if it exceeds those bounds?
+      - Much simpler to implement
 
 ## Steps that remain
 
@@ -27,17 +38,9 @@ This folder contains code to run the CSER squiggle.c model on the Finisterrae su
 - [ ] Insult Python
 - [ ] Por qué es "mpi.h" en vez de <mpi.h>???
 - [ ] What is #pragma omp single ??
-- [ ] Have a single sample_mpi function
-  - Draw sample and chunkify at the same time, rather than in two loops
-- [ ] Histogram code
+- [ ] Improve histogram code
 
 ---
 
 Notes on histogram.
 
-- As a linked list? Easier to expand, but O(n) access time 
-- As an array with some structure
-  - Much more annoying to expand
-  - Constant time access
-- Make histogram with constant ticks but very wide and later expand?
-  - Give error if it exceeds those bounds?
