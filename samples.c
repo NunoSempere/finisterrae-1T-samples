@@ -162,14 +162,18 @@ Summary_stats sampler_finisterrae(double (*sampler)(uint64_t* seed))
             .min = xs[0], 
             .max = xs[0],
             .mean = array_mean(xs, n_samples), 
-            .variance = 0,
+            .variance = 0.0,
             .histogram = individual_mpi_process_histogram, 
         };
 
         double var = 0.0;
         #pragma omp parallel for simd reduction(+:var) // unclear if the for simd reduction applies after we've added other items to the for loop
-        for (uint64_t i = 0; i < n_samples; i++) {
+        for (int i = 0; i < n_samples; i++) {
             var += (xs[i] - individual_mpi_process_stats.mean) * (xs[i] - individual_mpi_process_stats.mean);
+        }
+        individual_mpi_process_stats.variance = var / n_samples;
+
+        for (int i = 0; i < n_samples; i++) { // do this serially to avoid race conditions 
             if (individual_mpi_process_stats.min > xs[i]) individual_mpi_process_stats.min = xs[i];
             if (individual_mpi_process_stats.max < xs[i]) individual_mpi_process_stats.max = xs[i];
             if (xs[i] < individual_mpi_process_stats.histogram.min || xs[i] > individual_mpi_process_stats.histogram.max) {
@@ -179,7 +183,6 @@ Summary_stats sampler_finisterrae(double (*sampler)(uint64_t* seed))
                 individual_mpi_process_stats.histogram.bins[(int)rounded]++;
             }
         }
-        individual_mpi_process_stats.variance = var / n_samples;
 
         /*
         for (int i=0; i<n_processes; i++){
