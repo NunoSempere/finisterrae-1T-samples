@@ -3,6 +3,7 @@
 #include <omp.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h> // sleep
 
 #include "squiggle_c/squiggle.h"
 #include "squiggle_c/squiggle_more.h"
@@ -90,7 +91,7 @@ void reduce_chunk_stats(Summary_stats* accumulator, Summary_stats* new, int n_ch
         }
     }
     accumulator->mean = sum_weighted_means / accumulator->n_samples;
-    accumulator->histogram.outliers = new[0].histogram.outliers; // just to text printing
+    // accumulator->histogram.outliers = new[0].histogram.outliers; // just to text printing
 }
 
 void print_stats(Summary_stats* result)
@@ -98,7 +99,17 @@ void print_stats(Summary_stats* result)
     printf("Result {\n  N_samples: %lu\n  Min:  %4.3lf\n  Max:  %4.3lf\n  Mean: %4.3lf\n  Var:  %4.3lf\n}\n", result->n_samples, result->min, result->max, result->mean, result->variance);
 
     print_histogram(result->histogram.bins, result->histogram.n_bins, result->histogram.min, result->histogram.bin_width);
-    printf("First outlier node: { .is_last: %d, .next: %p, .val: %lf }\n", result->histogram.outliers.is_last, result->histogram.outliers.next, result->histogram.outliers.val);
+    
+    struct Outliers* o = &result->histogram.outliers;
+    printf("First outlier node: { .is_last: %d, .next: %p, .val: %lf }\n", o->is_last, o->next, o->val);
+    while(o->next != NULL && o->is_last != 1){
+        o = o->next;
+        printf("Additional outlier node: { .is_last: %d, .next: %p, .val: %lf }\n", o->is_last, o->next, o->val);
+
+        sleep(1);
+        printf("Slept for 1s");
+
+    }
 }
 
 Summary_stats sampler_finisterrae(Finisterrae_params finisterrae)
@@ -193,8 +204,11 @@ Summary_stats sampler_finisterrae(Finisterrae_params finisterrae)
             if (individual_mpi_process_stats.min > xs[i]) individual_mpi_process_stats.min = xs[i];
             if (individual_mpi_process_stats.max < xs[i]) individual_mpi_process_stats.max = xs[i];
             if (xs[i] < individual_mpi_process_stats.histogram.min || xs[i] >= individual_mpi_process_stats.histogram.sup) {
-                struct Outliers new_outlier = { .next = &individual_mpi_process_stats.histogram.outliers, .is_last = 0,  .val = xs[i]};
-                individual_mpi_process_stats.histogram.outliers = new_outlier;
+                struct Outliers* new_outlier = (struct Outliers*) malloc(sizeof(struct Outliers));
+                new_outlier->val = xs[i];
+                new_outlier->next = individual_mpi_process_stats.histogram.outliers.next;
+                new_outlier->is_last = 0;
+                individual_mpi_process_stats.histogram.outliers = *new_outlier;
                 printf("xs[i] outside histogram domain: %lf", xs[i]);
             } else {
                 double bin_double = (xs[i] - individual_mpi_process_stats.histogram.min)/individual_mpi_process_stats.histogram.bin_width;
@@ -238,9 +252,9 @@ int main(int argc, char** argv)
         .sampler = sample_cost_effectiveness_cser_bps_per_million, 
         .n_samples_per_process = N_SAMPLES_PER_PROCESS,
         .histogram_min = 0,
-        .histogram_sup = 1000,
+        .histogram_sup = 150 ,
         .histogram_bin_width = 1,
-        .histogram_n_bins = 1000, 
+        .histogram_n_bins = 150, 
     });
     return 0;
 }
