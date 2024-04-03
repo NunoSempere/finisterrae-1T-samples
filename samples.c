@@ -48,12 +48,12 @@ typedef struct _Summary_stats {
 } Summary_stats;
 
 typedef struct _Finisterrae_params {
-    double (*sampler)(uint64_t* seed);
-    int n_samples_per_process;
-    double histogram_min;
-    double histogram_max;
-    double histogram_bin_width;
-    double histogram_n_bins;
+    const double (*sampler)(uint64_t* seed);
+    const int n_samples_per_process;
+    const double histogram_min;
+    const double histogram_max;
+    const double histogram_bin_width;
+    const double histogram_n_bins;
 } Finisterrae_params;
 
 double combine_variances(Summary_stats* x, Summary_stats* y)
