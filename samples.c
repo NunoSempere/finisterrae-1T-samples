@@ -8,7 +8,7 @@
 #include "squiggle_c/squiggle_more.h"
 #include "model.h"
 
-/* Macro to be able to run part of the code in a system without MPI */
+// Macro to be able to run part of the code in a system without MPI
 #define NO_MPI // Comment out if running on an MPI system
 #ifdef NO_MPI
     #define IF_MPI(x)
@@ -22,7 +22,17 @@
     #define N_SAMPLES_PER_PROCESS 1000000000
 #endif
 
-/* Structs */
+/* External interface struct */
+typedef struct _Finisterrae_params {
+    const double (*sampler)(uint64_t* seed);
+    const int n_samples_per_process;
+    const double histogram_min;
+    const double histogram_sup;
+    const double histogram_bin_width;
+    const double histogram_n_bins;
+} Finisterrae_params;
+
+/* Internal interface structs */ 
 #define CACHE_LINE_SIZE 64
 typedef struct _seed_cache_box {
     uint64_t seed;
@@ -30,12 +40,19 @@ typedef struct _seed_cache_box {
     // Cache line size is 64 *bytes*, uint64_t is 64 *bits* (8 bytes). Different units!
 } seed_cache_box;
 
+struct Outliers {
+    double val;
+    struct Outliers* next;
+    int is_last;
+};
+
 typedef struct _Histogram {
     double min;
-    double max;
+    double sup;
     double bin_width;
     double n_bins;
     int* bins;
+    struct Outliers outliers;
 } Histogram;
 
 typedef struct _Summary_stats {
@@ -46,15 +63,6 @@ typedef struct _Summary_stats {
     double variance;
     Histogram histogram;
 } Summary_stats;
-
-typedef struct _Finisterrae_params {
-    const double (*sampler)(uint64_t* seed);
-    const int n_samples_per_process;
-    const double histogram_min;
-    const double histogram_max;
-    const double histogram_bin_width;
-    const double histogram_n_bins;
-} Finisterrae_params;
 
 /* Helpers */
 double combine_variances(Summary_stats* x, Summary_stats* y)
@@ -82,6 +90,7 @@ void reduce_chunk_stats(Summary_stats* accumulator, Summary_stats* new, int n_ch
         }
     }
     accumulator->mean = sum_weighted_means / accumulator->n_samples;
+    accumulator->histogram.outliers = new[0].histogram.outliers; // just to text printing
 }
 
 void print_stats(Summary_stats* result)
@@ -89,11 +98,12 @@ void print_stats(Summary_stats* result)
     printf("Result {\n  N_samples: %lu\n  Min:  %4.3lf\n  Max:  %4.3lf\n  Mean: %4.3lf\n  Var:  %4.3lf\n}\n", result->n_samples, result->min, result->max, result->mean, result->variance);
 
     print_histogram(result->histogram.bins, result->histogram.n_bins, result->histogram.min, result->histogram.bin_width);
+    printf("First outlier node: { .is_last: %d, .next: %p, .val: %lf }\n", result->histogram.outliers.is_last, result->histogram.outliers.next, result->histogram.outliers.val);
 }
 
 Summary_stats sampler_finisterrae(Finisterrae_params finisterrae)
 {
-    // Histogram parameters: histogram_min, histogram_max
+    // Histogram parameters: histogram_min, histogram_sup
     // START MPI ENVIRONMENT
     int mpi_id = 0, n_processes = 1;
     MPI_Status status;
@@ -113,7 +123,8 @@ Summary_stats sampler_finisterrae(Finisterrae_params finisterrae)
     Summary_stats aggregated_mpi_processes_stats;
 
     int* aggregate_histogram_bins = (int*)calloc((size_t) finisterrae.histogram_n_bins, sizeof(int));
-    Histogram aggregate_histogram = { .min = finisterrae.histogram_min, .max = finisterrae.histogram_max, .bin_width = finisterrae.histogram_bin_width, .n_bins = finisterrae.histogram_n_bins, .bins = aggregate_histogram_bins };
+    struct Outliers aggregate_histogram_outliers = { .next = NULL, .is_last = 1, };
+    Histogram aggregate_histogram = { .min = finisterrae.histogram_min, .sup = finisterrae.histogram_sup, .bin_width = finisterrae.histogram_bin_width, .n_bins = finisterrae.histogram_n_bins, .bins = aggregate_histogram_bins, .outliers = aggregate_histogram_outliers, };
     uint64_t* seed = malloc(sizeof(uint64_t)); *seed = UINT64_MAX / 2; double s = finisterrae.sampler(seed); free(seed);
     aggregated_mpi_processes_stats = (Summary_stats) { .n_samples = 1, .min = s, .max = s, .mean = s, .variance = 0, .histogram = aggregate_histogram };
 
@@ -162,7 +173,8 @@ Summary_stats sampler_finisterrae(Finisterrae_params finisterrae)
 
         // Initialize individual process stats struct
         int* individual_bins = (int*)calloc((size_t)finisterrae.histogram_n_bins, sizeof(int));
-        Histogram individual_mpi_process_histogram = { .min = finisterrae.histogram_min, .max = finisterrae.histogram_max, .bin_width = finisterrae.histogram_bin_width, .n_bins = finisterrae.histogram_n_bins, .bins = individual_bins, };
+        struct Outliers individual_histogram_outliers = { .next = NULL, .is_last = 1, };
+        Histogram individual_mpi_process_histogram = { .min = finisterrae.histogram_min, .sup= finisterrae.histogram_sup, .bin_width = finisterrae.histogram_bin_width, .n_bins = finisterrae.histogram_n_bins, .bins = individual_bins, .outliers = individual_histogram_outliers, };
         individual_mpi_process_stats = (Summary_stats) { 
             .n_samples = n_samples, 
             .min = xs[0], 
@@ -180,7 +192,9 @@ Summary_stats sampler_finisterrae(Finisterrae_params finisterrae)
             mean += xs[i];
             if (individual_mpi_process_stats.min > xs[i]) individual_mpi_process_stats.min = xs[i];
             if (individual_mpi_process_stats.max < xs[i]) individual_mpi_process_stats.max = xs[i];
-            if (xs[i] < individual_mpi_process_stats.histogram.min || xs[i] >= individual_mpi_process_stats.histogram.max) {
+            if (xs[i] < individual_mpi_process_stats.histogram.min || xs[i] >= individual_mpi_process_stats.histogram.sup) {
+                struct Outliers new_outlier = { .next = &individual_mpi_process_stats.histogram.outliers, .is_last = 0,  .val = xs[i]};
+                individual_mpi_process_stats.histogram.outliers = new_outlier;
                 printf("xs[i] outside histogram domain: %lf", xs[i]);
             } else {
                 double bin_double = (xs[i] - individual_mpi_process_stats.histogram.min)/individual_mpi_process_stats.histogram.bin_width;
@@ -224,7 +238,7 @@ int main(int argc, char** argv)
         .sampler = sample_cost_effectiveness_cser_bps_per_million, 
         .n_samples_per_process = N_SAMPLES_PER_PROCESS,
         .histogram_min = 0,
-        .histogram_max = 1000,
+        .histogram_sup = 1000,
         .histogram_bin_width = 1,
         .histogram_n_bins = 1000, 
     });

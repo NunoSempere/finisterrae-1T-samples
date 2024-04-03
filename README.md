@@ -31,6 +31,7 @@ This folder contains code to run the CSER squiggle.c model on the Finisterrae su
     - [x] Make histogram with constant ticks but very wide and later expand?
       - Give error if it exceeds those bounds?
       - Much simpler to implement
+      - Then have *outliers* as a linked list?
 
 ## Steps that remain
 
