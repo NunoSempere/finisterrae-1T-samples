@@ -90,7 +90,7 @@ void print_stats(Summary_stats* result)
     print_histogram(result->histogram.bins, result->histogram.n_bins, result->histogram.min, result->histogram.bin_width);
 }
 
-Summary_stats sampler_finisterrae(double (*sampler)(uint64_t* seed), int n_samples_per_process)
+Summary_stats sampler_finisterrae(Finisterrae_params finisterrae)
 {
     // Histogram parameters: histogram_min, histogram_max
     // START MPI ENVIRONMENT
@@ -113,7 +113,7 @@ Summary_stats sampler_finisterrae(double (*sampler)(uint64_t* seed), int n_sampl
 
     int* aggregate_histogram_bins = (int*)calloc((size_t)1000, sizeof(int));
     Histogram aggregate_histogram = { .min = 0, .max = 1000, .bin_width = 1, .n_bins = 1000, .bins = aggregate_histogram_bins };
-    uint64_t* seed = malloc(sizeof(uint64_t)); *seed = UINT64_MAX / 2; double s = sampler(seed); free(seed);
+    uint64_t* seed = malloc(sizeof(uint64_t)); *seed = UINT64_MAX / 2; double s = finisterrae.sampler(seed); free(seed);
     aggregated_mpi_processes_stats = (Summary_stats) { .n_samples = 1, .min = s, .max = s, .mean = s, .variance = 0, .histogram = aggregate_histogram };
 
     // Get the number of threads
@@ -139,7 +139,7 @@ Summary_stats sampler_finisterrae(double (*sampler)(uint64_t* seed), int n_sampl
         // Nuño to Jorge: you can't do this in parallel, since rand() is not thread safe
         cache_box[thread_id].seed = (uint64_t)rand() * (UINT64_MAX / RAND_MAX);
     }
-    int n_samples = n_samples_per_process; /* these are per mpi process, distributed between threads  */
+    int n_samples = finisterrae.n_samples_per_process; /* these are per mpi process, distributed between threads  */
     double* xs = (double*)malloc((size_t)n_samples * sizeof(double));
     // By persisting these variables rather than recreating them with each loop, we
     // 1. Get slightly better pseudo-randomness, I think, as the threads continue and we reduce our reliance on srand
@@ -156,7 +156,7 @@ Summary_stats sampler_finisterrae(double (*sampler)(uint64_t* seed), int n_sampl
         for (int j = 0; j < n_samples; j++) {
             int thread_id = omp_get_thread_num();
             // Can we get the minimum and maximum here? Not quite straightforwardly, because we have different threads operating independently
-            xs[j] = sampler(&(cache_box[thread_id].seed));
+            xs[j] = finisterrae.sampler(&(cache_box[thread_id].seed));
         }
 
         // Initialize individual process stats struct
@@ -219,6 +219,13 @@ Summary_stats sampler_finisterrae(double (*sampler)(uint64_t* seed), int n_sampl
 
 int main(int argc, char** argv)
 {
-    sampler_finisterrae(sample_cost_effectiveness_cser_bps_per_million, N_SAMPLES_PER_PROCESS);
+    sampler_finisterrae((Finisterrae_params) {
+        .sampler = sample_cost_effectiveness_cser_bps_per_million, 
+        .n_samples_per_process = N_SAMPLES_PER_PROCESS,
+        .histogram_min = 0,
+        .histogram_max = 1000,
+        .histogram_bin_width = 1,
+        .histogram_n_bins = 1000, 
+    });
     return 0;
 }
