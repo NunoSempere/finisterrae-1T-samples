@@ -31,17 +31,13 @@ This folder contains code to run the CSER squiggle.c model on the Finisterrae su
     - [x] Make histogram with constant ticks but very wide and later expand?
       - Give error if it exceeds those bounds?
       - Much simpler to implement
-      - Then have *outliers* as a linked list?
+      - Then have *outliers* as a linked list
 
 ## Steps that remain
 
 - [ ] Report results, and how they change as the number of samples increases
-- [ ] Insult Python
 - [ ] Por qué es "mpi.h" en vez de <mpi.h>???
-- [ ] What is #pragma omp single ??
+- [ ] What is #pragma omp single and why is it used together with #pragma omp parallel?
 - [ ] Improve histogram code
-
----
-
-Notes on histogram.
-
+  - Complete or rewamp outliers code
+- [ ] Integrate with original squiggle.c repository
