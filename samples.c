@@ -3,7 +3,6 @@
 #include <omp.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h> // sleep
 
 #include "squiggle_c/squiggle.h"
 #include "squiggle_c/squiggle_more.h"
@@ -109,7 +108,6 @@ void print_stats(Summary_stats* result)
         o = o->next;
         printf("Additional outlier node: { .is_last: %d, .next: %p, .val: %lf }\n", o->is_last, o->next, o->val);
 
-        sleep(1);
         printf("Slept for 1s");
 
     }*/
