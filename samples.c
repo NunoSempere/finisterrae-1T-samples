@@ -165,6 +165,11 @@ Summary_stats sampler_finisterrae(Finisterrae_params finisterrae)
     }
     int n_samples = finisterrae.n_samples_per_process; /* these are per mpi process, distributed between threads  */
     double* xs = (double*)malloc((size_t)n_samples * sizeof(double));
+    double* samples = (double*) malloc((size_t)n_samples * sizeof(double));
+    if (samples == NULL) {
+        fprintf(stderr, "Memory allocation for samples failed.\n");
+        return;
+    }
     // By persisting these variables rather than recreating them with each loop, we
     // 1. Get slightly better pseudo-randomness, I think, as the threads continue and we reduce our reliance on srand
     // 2. Become more slightly more efficient, as we don't have to call and free memory constantly
