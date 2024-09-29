@@ -1,3 +1,3 @@
 - Deal with output?
+  - Print to file, every n iterations
 - Save outliers?
-- 

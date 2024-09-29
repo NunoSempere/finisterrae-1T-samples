@@ -17,7 +17,7 @@ build:
 	$(CC) $(DEBUG) $(OPTIMIZATION) samples.c model.c ./squiggle_c/squiggle.c  ./squiggle_c/squiggle_more.c -lm -fopenmp -o $(OUTPUT)
 
 run:
-	$(OUTPUT)
+	$(OUTPUT) 
 
 save:
 	$(OUTPUT) > output.txt
