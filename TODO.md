@@ -1,0 +1,3 @@
+- Deal with output?
+- Save outliers?
+- 

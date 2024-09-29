@@ -40,13 +40,10 @@ typedef struct _seed_cache_box {
     // Cache line size is 64 *bytes*, uint64_t is 64 *bits* (8 bytes). Different units!
 } seed_cache_box;
 
-/*
 struct Outliers {
-    double val;
-    struct Outliers* next;
-    int is_last;
+    double* os;
+    int n;
 }; // incomplete implementation
-*/
 
 typedef struct _Histogram {
     double min;
@@ -54,7 +51,7 @@ typedef struct _Histogram {
     double bin_width;
     double n_bins;
     int* bins;
-    // struct Outliers outliers;
+    struct Outliers outliers;
 } Histogram;
 
 typedef struct _Summary_stats {
@@ -113,7 +110,7 @@ void print_stats(Summary_stats* result)
     }*/
 }
 
-Summary_stats sampler_finisterrae(Finisterrae_params finisterrae)
+int sampler_finisterrae(Finisterrae_params finisterrae)
 {
     // Histogram parameters: histogram_min, histogram_sup
     // START MPI ENVIRONMENT
@@ -135,8 +132,8 @@ Summary_stats sampler_finisterrae(Finisterrae_params finisterrae)
     Summary_stats aggregated_mpi_processes_stats;
 
     int* aggregate_histogram_bins = (int*)calloc((size_t) finisterrae.histogram_n_bins, sizeof(int));
-    // struct Outliers aggregate_histogram_outliers = { .next = NULL, .is_last = 1, };
-    Histogram aggregate_histogram = { .min = finisterrae.histogram_min, .sup = finisterrae.histogram_sup, .bin_width = finisterrae.histogram_bin_width, .n_bins = finisterrae.histogram_n_bins, .bins = aggregate_histogram_bins, /* .outliers = aggregate_histogram_outliers, */ };
+    struct Outliers aggregate_histogram_outliers = { .os = NULL, .n = 0, };
+    Histogram aggregate_histogram = { .min = finisterrae.histogram_min, .sup = finisterrae.histogram_sup, .bin_width = finisterrae.histogram_bin_width, .n_bins = finisterrae.histogram_n_bins, .bins = aggregate_histogram_bins, .outliers = aggregate_histogram_outliers, };
     uint64_t* seed = malloc(sizeof(uint64_t)); *seed = UINT64_MAX / 2; double s = finisterrae.sampler(seed); free(seed);
     aggregated_mpi_processes_stats = (Summary_stats) { .n_samples = 1, .min = s, .max = s, .mean = s, .variance = 0, .histogram = aggregate_histogram };
 
@@ -168,13 +165,13 @@ Summary_stats sampler_finisterrae(Finisterrae_params finisterrae)
     double* samples = (double*) malloc((size_t)n_samples * sizeof(double));
     if (samples == NULL) {
         fprintf(stderr, "Memory allocation for samples failed.\n");
-        return;
+        return 1;
     }
     // By persisting these variables rather than recreating them with each loop, we
     // 1. Get slightly better pseudo-randomness, I think, as the threads continue and we reduce our reliance on srand
     // 2. Become more slightly more efficient, as we don't have to call and free memory constantly
 
-    for (int i = 0;; i++) {
+    for (int iter = 0;; iter++) {
         // Wait until the finisterrae allocator kills this
 
         // sampler_parallel(sample_cost_effectiveness_cser_bps_per_million, samples, n_threads, n_samples, mpi_id+1+i*n_processes);
@@ -250,11 +247,12 @@ Summary_stats sampler_finisterrae(Finisterrae_params finisterrae)
 
         if (mpi_id == 0) {
             reduce_chunk_stats(&aggregated_mpi_processes_stats, mpi_processes_stats_array, n_processes);
-            printf("\nIter %3d:\n", i);
+            printf("\nIter %3d:\n", iter);
             print_stats(&aggregated_mpi_processes_stats);
         }
     }
     free(cache_box); // should never be reached, really
+    return 0;
 }
 
 int main(int argc, char** argv)
@@ -263,9 +261,9 @@ int main(int argc, char** argv)
         .sampler = sample_cost_effectiveness_cser_bps_per_million, 
         .n_samples_per_process = N_SAMPLES_PER_PROCESS,
         .histogram_min = 0,
-        .histogram_sup = 200 ,
+        .histogram_sup = 100 ,
         .histogram_bin_width = 1,
-        .histogram_n_bins = 200, 
+        .histogram_n_bins = 100, 
     });
     return 0;
 }
