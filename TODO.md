@@ -1,3 +1,6 @@
-- Deal with output?
-  - Print to file, every n iterations
-- Save outliers?
+- [x] Deal with output?
+  - [x] Print to file, every n iterations
+  - Finisterrae sends a file
+- [x] Save outliers? => use struct instead of file
+- [ ] Expand outliers struct if overflows 
+- [ ] Choose histogram & stats & num samples parameters 
