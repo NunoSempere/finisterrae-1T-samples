@@ -100,8 +100,8 @@ void reduce_chunk_stats(Summary_stats* accumulator, Summary_stats* new, int n_ch
             accumulator->outliers.os = new_os;
             accumulator->outliers.capacity = new_capacity;
         }
-        for(int k=0; k<new[i].outliers.n; k++){
-            accumulator->outliers.os[accumulator->outliers.n + k] = new[i].outliers.os[k]; 
+        for(int k=0; k < new[i].outliers.n && accumulator->outliers.n < accumulator->outliers.capacity; k++){
+            accumulator->outliers.os[accumulator->outliers.n] = new[i].outliers.os[k]; 
             accumulator->outliers.n++;
         }
     }
@@ -294,10 +294,10 @@ int main(int argc, char** argv)
         .sampler = sample_cost_effectiveness_cser_bps_per_million, 
         .n_samples_per_process = N_SAMPLES_PER_PROCESS,
         .histogram_min = 0,
-        .histogram_sup = 50,
+        .histogram_sup = 200,
         .histogram_bin_width = 1,
-        .histogram_n_bins = 100,
-        .print_every_n_iters = 10,
+        .histogram_n_bins = 200,
+        .print_every_n_iters = 1000,
     });
     return 0;
 }
