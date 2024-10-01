@@ -10,11 +10,11 @@ abstract: ""
 
 Estimators in the tradition of Fermi or Tetlock sometimes create models that seek to capture their subjective credences—as opposed to, for instance, fitting a model to an underlying set of samples. 
 
-One way one might go about this is to use the set of idioms that grew from the foretold.io experimental forecasting platform into [Squiggle](https://www.squiggle-language.com/), now a programming language for intuitive estimation. The original iteration of squiggle has been ported to Python ([Squiggle.py](https://github.com/rethinkpriorities/squigglepy)) and to C ([Squiggle.c](https://git.nunosempere.com/personal/squiggle.c)).
+One way one might go about this is to use the set of idioms that grew from the foretold.io experimental forecasting platform into [Squiggle](https://www.squiggle-language.com/), now a programming language for intuitive probabilitistic estimation. The original iteration of squiggle has been ported to Python ([Squiggle.py](https://github.com/rethinkpriorities/squigglepy)), to C ([Squiggle.c](https://git.nunosempere.com/personal/squiggle.c)), or to [go](https://git.nunosempere.com/NunoSempere/fermi).
 
-However, those idioms favour relying on Monte Carlo estimation, that is, approximating a model by drawing samples rather than specifying the model exactly. But this approach sometimes has difficulty modelling long-tail behaviour. 
+However, those idioms favour relying on Monte Carlo estimation, that is, approximating a model by drawing samples rather than specifying the model exactly. This approach sometimes has difficulty modelling long-tail behaviour. 
 
-To explore those limits, and also just for the sake of the technical challenge, in this paper we describe how to draw 10e12 samples from reasonably complex judgmental estimation model. Then, we show how summary statistics change as we draw more samples. We conclude with [xyz].
+To explore those limits, and also just for the sake of the technical challenge, in this paper we describe how to draw 10e12 samples (an american trillion) from reasonably complex judgmental estimation model. We show how summary statistics change as we draw more samples. We conclude discussing limitations and practical applications.
 
 ## 1. How to draw 10e9 samples
 
@@ -93,8 +93,16 @@ Finally, we can get around 3x more samples by running the code for 18 hours inst
 
 [to do]
 
+## 3. An abuse of the underlying PRNG primitives?
+
+Do the underlying pseudo-random number generator primitives we are using stand up to scaling to 1T samples? 
+If you can draw 1T samples *at all*, you can draw 100K, 1M, 10M samples very fast.
+
 ## Conclusion
 
 Rethink Priorities' models puny struggled (https://forum.effectivealtruism.org/posts/pniDWyjc9vY5sjGre/rethink-priorities-cross-cause-cost-effectiveness-model) to reach more than 150k samples. Eventually, with some optimizations, they moved to the billions. Much more is possible with a focus on speed. 
 
 
+---
+
+The virtue of fast Monte Carlo primitives: Drawing 1T samples and a REPL for rapid fermi iteration

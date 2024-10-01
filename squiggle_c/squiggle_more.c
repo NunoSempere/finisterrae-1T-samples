@@ -154,8 +154,8 @@ void array_print_stats(double xs[], int n){
 void print_histogram(uint64_t* bins, int n_bins, double min_value, double bin_width){
 
     // Calculate the scaling factor based on the maximum bin count
-    int total_bin_count = 0;
-    int max_bin_count = 0;
+    uint64_t total_bin_count = 0;
+    uint64_t max_bin_count = 0;
     for (int i = 0; i < n_bins; i++) {
         if (bins[i] > max_bin_count) {
             max_bin_count = bins[i];
@@ -186,12 +186,12 @@ void print_histogram(uint64_t* bins, int n_bins, double min_value, double bin_wi
         // number of decimals could depend on the number of bins
         // or on the size of the smallest bucket
 
-        int marks = (int)(bins[i] * scale);
+        uint64_t marks = (uint64_t)(bins[i] * scale);
         for (int j = 0; j < marks; j++) {
             printf("█");
         }
         printf(" %ld", bins[i]);
-        float pct = 100.0 * (float)bins[i]/(float)total_bin_count;
+        double pct = 100.0 * (double)bins[i]/(double)total_bin_count;
         if(pct > (0.1/100.0)){
             printf(" (%.3f%%)", pct);
         }

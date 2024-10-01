@@ -2,6 +2,7 @@
   - [x] Print to file, every n iterations
   - Finisterrae sends a file
 - [x] Save outliers? => use struct instead of file
-- [ ] Expand outliers struct if overflows 
+- [x] Expand outliers struct if overflows 
+- [ ] Expand bin width to fix overlow
 - [ ] Choose histogram & stats & num samples parameters 
 - [ ] Is there something wrong with the aggregator? It seems like the n increases much slower?
