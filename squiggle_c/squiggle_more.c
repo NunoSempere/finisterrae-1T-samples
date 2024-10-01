@@ -8,6 +8,12 @@
 #include <stdlib.h>
 #include <string.h> // memcpy
 
+// Quantities
+#define THOUSAND 1000
+#define MILLION (1000 * 1000)
+#define BILLION (1000 * MILLION)
+#define TRILLION (1000 * BILLION)
+
 /* Cache optimizations */
 #define CACHE_LINE_SIZE 64
 // getconf LEVEL1_DCACHE_LINESIZE

@@ -8,10 +8,6 @@
 #include "squiggle_c/squiggle_more.h"
 #include "model.h"
 
-#define MILLION (1000 * 1000)
-#define BILLION (1000 * MILLION)
-#define TRILLION (1000 * BILLION)
-
 // Macro to be able to run part of the code in a system without MPI
 #define NO_MPI // Comment out if running on an MPI system
 #ifdef NO_MPI
@@ -297,7 +293,7 @@ int sampler_finisterrae(Finisterrae_params finisterrae)
 int main(int argc, char** argv)
 {
     sampler_finisterrae((Finisterrae_params) {
-        .sampler = sample_cost_effectiveness_cser_bps_per_million, 
+        .sampler = sample_cost_effectiveness_sentinel_bps_per_million, 
         .n_samples_per_process = N_SAMPLES_PER_PROCESS,
         .histogram_min = 0,
         .histogram_sup = 400,

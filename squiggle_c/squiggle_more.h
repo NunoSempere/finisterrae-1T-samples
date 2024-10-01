@@ -1,6 +1,11 @@
 #ifndef SQUIGGLE_C_EXTRA
 #define SQUIGGLE_C_EXTRA
 
+#define THOUSAND 1000
+#define MILLION (1000 * 1000)
+#define BILLION (1000 * MILLION)
+#define TRILLION (1000 * BILLION)
+
 /* Parallel sampling */
 void sampler_parallel(double (*sampler)(uint64_t* seed), double* results, int n_threads, uint64_t n_samples, int m_seed);
 
