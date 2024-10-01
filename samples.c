@@ -14,7 +14,7 @@
     #define IF_MPI(x)
     #define IF_NO_MPI(x) x
     #define MPI_Status int
-    #define N_SAMPLES_PER_PROCESS 1000000
+    #define N_SAMPLES_PER_PROCESS 100000
 #else
     #include "mpi.h" /* N: why is this "mpi.h" and not <mpi.h> ??? */
     #define IF_MPI(x) x
@@ -30,6 +30,7 @@ typedef struct _Finisterrae_params {
     const double histogram_sup;
     const double histogram_bin_width;
     const double histogram_n_bins;
+    const int print_every_n_iters;
 } Finisterrae_params;
 
 /* Internal interface structs */ 
@@ -52,7 +53,8 @@ typedef struct _Histogram {
 typedef struct _Outliers {
     double* os;
     int n;
-} Outliers; // incomplete implementation
+    int capacity;
+} Outliers;
 
 typedef struct _Summary_stats {
     uint64_t n_samples;
@@ -88,15 +90,19 @@ void reduce_chunk_stats(Summary_stats* accumulator, Summary_stats* new, int n_ch
         for (int j = 0; j < accumulator->histogram.n_bins; j++) {
             accumulator->histogram.bins[j] += new[i].histogram.bins[j];
         }
-        if(accumulator->outliers.n + new[i].outliers.n  < 100){
-            int m = accumulator->outliers.n; 
-            for(int k=0; k<new[i].outliers.n; k++){
-                accumulator->outliers.os[m + k] = new[i].outliers.os[k]; 
-                accumulator->outliers.n++;
+        if(accumulator->outliers.n + new[i].outliers.n >= accumulator->outliers.capacity){
+            int new_capacity = accumulator->outliers.capacity * 2;
+            double* new_os = (double*)realloc(accumulator->outliers.os, new_capacity * sizeof(double));
+            if (new_os == NULL) {
+                printf("Memory reallocation for outliers failed\n");
+                return;
             }
-
-        } else {
-            printf("Too many outliers\n");
+            accumulator->outliers.os = new_os;
+            accumulator->outliers.capacity = new_capacity;
+        }
+        for(int k=0; k<new[i].outliers.n; k++){
+            accumulator->outliers.os[accumulator->outliers.n + k] = new[i].outliers.os[k]; 
+            accumulator->outliers.n++;
         }
     }
     accumulator->mean = sum_weighted_means / accumulator->n_samples;
@@ -152,7 +158,7 @@ int sampler_finisterrae(Finisterrae_params finisterrae)
     Histogram aggregate_histogram = { .min = finisterrae.histogram_min, .sup = finisterrae.histogram_sup, .bin_width = finisterrae.histogram_bin_width, .n_bins = finisterrae.histogram_n_bins, .bins = aggregate_histogram_bins,};
     uint64_t* seed = malloc(sizeof(uint64_t)); *seed = UINT64_MAX / 2; double s = finisterrae.sampler(seed); free(seed);
     double* os = (double*)malloc((size_t) 100 * sizeof(double)); // to-do: start with a different number of outliers
-    Outliers aggregate_histogram_outliers = { .os = os, .n = 0, };
+    Outliers aggregate_histogram_outliers = { .os = os, .n = 0, .capacity = 100 };
     aggregated_mpi_processes_stats = (Summary_stats) { .n_samples = 1, .min = s, .max = s, .mean = s, .variance = 0, .histogram = aggregate_histogram,  .outliers = aggregate_histogram_outliers,  };
 
     // Get the number of threads
@@ -207,7 +213,7 @@ int sampler_finisterrae(Finisterrae_params finisterrae)
         int* individual_bins = (int*)calloc((size_t)finisterrae.histogram_n_bins, sizeof(int));
         Histogram individual_mpi_process_histogram = { .min = finisterrae.histogram_min, .sup= finisterrae.histogram_sup, .bin_width = finisterrae.histogram_bin_width, .n_bins = finisterrae.histogram_n_bins, .bins = individual_bins, };
         double* os = (double*)malloc((size_t) 100 * sizeof(double)); // to-do: start with a different number of outliers
-        Outliers individual_mpi_histogram_outliers = { .os = os, .n = 0, };
+        Outliers individual_mpi_histogram_outliers = { .os = os, .n = 0, .capacity = 100 };
         individual_mpi_process_stats = (Summary_stats) { 
             .n_samples = n_samples, 
             .min = xs[0], 
@@ -227,12 +233,18 @@ int sampler_finisterrae(Finisterrae_params finisterrae)
             if (individual_mpi_process_stats.min > xs[i]) individual_mpi_process_stats.min = xs[i];
             if (individual_mpi_process_stats.max < xs[i]) individual_mpi_process_stats.max = xs[i];
             if (xs[i] < individual_mpi_process_stats.histogram.min || xs[i] >= individual_mpi_process_stats.histogram.sup) {
-                if(individual_mpi_process_stats.outliers.n < 100){
-                    individual_mpi_process_stats.outliers.os[individual_mpi_process_stats.outliers.n] = xs[i];
-                    individual_mpi_process_stats.outliers.n++;
-                } else {
-                    printf("Error: too many outliers: %lf\n", xs[i]);
+                if(individual_mpi_process_stats.outliers.n >= individual_mpi_process_stats.outliers.capacity){
+                    int new_capacity = individual_mpi_process_stats.outliers.capacity * 2;
+                    double* new_os = (double*)realloc(individual_mpi_process_stats.outliers.os, new_capacity * sizeof(double));
+                    if (new_os == NULL) {
+                        printf("Memory reallocation for outliers failed\n");
+                        return 1;
+                    }
+                    individual_mpi_process_stats.outliers.os = new_os;
+                    individual_mpi_process_stats.outliers.capacity = new_capacity;
                 }
+                individual_mpi_process_stats.outliers.os[individual_mpi_process_stats.outliers.n] = xs[i];
+                individual_mpi_process_stats.outliers.n++;
                 /*
                 fprintf(stderr, "xs[i] outside histogram domain: %lf\n", xs[i]);
                 FILE* fp = fopen("./outliers.txt", "a");
@@ -266,7 +278,7 @@ int sampler_finisterrae(Finisterrae_params finisterrae)
         IF_MPI(MPI_Gather(&individual_mpi_process_stats, sizeof(Summary_stats), MPI_CHAR, mpi_processes_stats_array, sizeof(Summary_stats), MPI_CHAR, 0, MPI_COMM_WORLD));
         IF_NO_MPI(mpi_processes_stats_array[0] = individual_mpi_process_stats);
 
-        if (mpi_id == 0 && (iter % 100 == 0)) {
+        if (mpi_id == 0 && (iter % finisterrae.print_every_n_iters == 0)) {
             reduce_chunk_stats(&aggregated_mpi_processes_stats, mpi_processes_stats_array, n_processes);
             printf("\nIter %3d:\n", iter);
             print_stats(&aggregated_mpi_processes_stats);
@@ -282,9 +294,10 @@ int main(int argc, char** argv)
         .sampler = sample_cost_effectiveness_cser_bps_per_million, 
         .n_samples_per_process = N_SAMPLES_PER_PROCESS,
         .histogram_min = 0,
-        .histogram_sup = 500 ,
+        .histogram_sup = 50,
         .histogram_bin_width = 1,
-        .histogram_n_bins = 500, 
+        .histogram_n_bins = 100,
+        .print_every_n_iters = 10,
     });
     return 0;
 }
