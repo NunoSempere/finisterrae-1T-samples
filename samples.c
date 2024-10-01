@@ -291,10 +291,25 @@ int main(int argc, char** argv)
         .sampler = sample_cost_effectiveness_sentinel_bps_per_million, 
         .n_samples_per_process = N_SAMPLES_PER_PROCESS,
         .histogram_min = 0,
-        .histogram_sup = 5,
-        .histogram_bin_width = 0.01,
-        .histogram_n_bins = 500,
+        .histogram_sup = 100,
+        .histogram_bin_width = 1,
+        .histogram_n_bins = 100,
         .print_every_n_iters = 10,
     });
+    // Two types of histogram: 
+    // 1. Exploring the main part of the distribution
+    // 2. Exploring the long tail. 
+    // We are interested in both, but for the 1T samples we are interested in the long tail
+    /* For main part of the distribution:
+    sampler_finisterrae((Finisterrae_params) {
+        .sampler = sample_cost_effectiveness_sentinel_bps_per_million, 
+        .n_samples_per_process = N_SAMPLES_PER_PROCESS,
+        .histogram_min = 0,
+        .histogram_sup = 1,
+        .histogram_bin_width = 0.01,
+        .histogram_n_bins = 100,
+        .print_every_n_iters = 10,
+    });
+    */
     return 0;
 }
