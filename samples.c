@@ -296,9 +296,9 @@ int main(int argc, char** argv)
         .sampler = sample_cost_effectiveness_cser_bps_per_million, 
         .n_samples_per_process = N_SAMPLES_PER_PROCESS,
         .histogram_min = 0,
-        .histogram_sup = 200,
+        .histogram_sup = 400,
         .histogram_bin_width = 1,
-        .histogram_n_bins = 200,
+        .histogram_n_bins = 400,
         .print_every_n_iters = 100,
     });
     return 0;
