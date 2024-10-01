@@ -14,7 +14,7 @@
     #define IF_MPI(x)
     #define IF_NO_MPI(x) x
     #define MPI_Status int
-    #define N_SAMPLES_PER_PROCESS 100000
+    #define N_SAMPLES_PER_PROCESS 1000000
 #else
     #include "mpi.h" /* N: why is this "mpi.h" and not <mpi.h> ??? */
     #define IF_MPI(x) x
@@ -111,7 +111,7 @@ void reduce_chunk_stats(Summary_stats* accumulator, Summary_stats* new, int n_ch
 
 void print_stats(Summary_stats* result)
 {
-    printf("Result {\n  N_samples: %lu\n  Min:  %4.3lf\n  Max:  %4.3lf\n  Mean: %4.3lf\n  Var:  %4.3lf\n}\n", result->n_samples, result->min, result->max, result->mean, result->variance);
+    printf("Result {\n  N_samples: %luM\n  Min:  %4.3lf\n  Max:  %4.3lf\n  Mean: %4.3lf\n  Var:  %4.3lf\n}\n", result->n_samples/1000000, result->min, result->max, result->mean, result->variance);
 
     print_histogram(result->histogram.bins, result->histogram.n_bins, result->histogram.min, result->histogram.bin_width);
 
@@ -167,7 +167,7 @@ int sampler_finisterrae(Finisterrae_params finisterrae)
     #pragma omp single
     {
         n_threads = omp_get_num_threads();
-        // printf("Num threads on process %d: %d\n", mpi_id, n_threads);
+        printf("Num threads on process %d: %d\n", mpi_id, n_threads);
     }
     /*
     omp_set_dynamic(0);
@@ -278,10 +278,12 @@ int sampler_finisterrae(Finisterrae_params finisterrae)
         IF_MPI(MPI_Gather(&individual_mpi_process_stats, sizeof(Summary_stats), MPI_CHAR, mpi_processes_stats_array, sizeof(Summary_stats), MPI_CHAR, 0, MPI_COMM_WORLD));
         IF_NO_MPI(mpi_processes_stats_array[0] = individual_mpi_process_stats);
 
-        if (mpi_id == 0 && (iter % finisterrae.print_every_n_iters == 0)) {
+        if (mpi_id == 0) {
             reduce_chunk_stats(&aggregated_mpi_processes_stats, mpi_processes_stats_array, n_processes);
-            printf("\nIter %3d:\n", iter);
-            print_stats(&aggregated_mpi_processes_stats);
+            if (iter % finisterrae.print_every_n_iters == 0){
+                printf("\nIter %3d:\n", iter);
+                print_stats(&aggregated_mpi_processes_stats);
+            }
         }
     }
     free(cache_box); // should never be reached, really
@@ -297,7 +299,7 @@ int main(int argc, char** argv)
         .histogram_sup = 200,
         .histogram_bin_width = 1,
         .histogram_n_bins = 200,
-        .print_every_n_iters = 1000,
+        .print_every_n_iters = 10,
     });
     return 0;
 }
