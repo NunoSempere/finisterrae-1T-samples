@@ -151,14 +151,16 @@ void array_print_stats(double xs[], int n){
            mean, std, ci_90.low, ci_80.low, ci_50.low, median, ci_50.high, ci_80.high, ci_90.high);
 }
 
-void print_histogram(int* bins, int n_bins, double min_value, double bin_width){
+void print_histogram(uint64_t* bins, int n_bins, double min_value, double bin_width){
 
     // Calculate the scaling factor based on the maximum bin count
+    int total_bin_count = 0;
     int max_bin_count = 0;
     for (int i = 0; i < n_bins; i++) {
         if (bins[i] > max_bin_count) {
             max_bin_count = bins[i];
         }
+        total_bin_count+=bins[i];
     }
     const int MAX_WIDTH = 50; // Adjust this to your terminal width
     double scale = max_bin_count > MAX_WIDTH ? (double)MAX_WIDTH / max_bin_count : 1.0;
@@ -185,7 +187,12 @@ void print_histogram(int* bins, int n_bins, double min_value, double bin_width){
         for (int j = 0; j < marks; j++) {
             printf("█");
         }
-        printf(" %d\n", bins[i]);
+        printf(" %ld", bins[i]);
+        float pct = 100.0 * (float)bins[i]/(float)total_bin_count;
+        if(pct > (0.1/100.0)){
+            printf(" (%.3f%%)", pct);
+        }
+        printf("\n");
     }
 
 }
@@ -201,7 +208,7 @@ void array_print_histogram(double* xs, int n_samples, int n_bins) {
         return;
     }
 
-    int *bins = (int*) calloc((size_t)n_bins, sizeof(int));
+    uint64_t *bins = (uint64_t*) calloc((size_t)n_bins, sizeof(uint64_t));
     if (bins == NULL) {
         fprintf(stderr, "Memory allocation for bins failed.\n");
         return;

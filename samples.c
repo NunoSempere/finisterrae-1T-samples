@@ -25,7 +25,7 @@
 /* External interface struct */
 typedef struct _Finisterrae_params {
     const double (*sampler)(uint64_t* seed);
-    const int n_samples_per_process;
+    const int64_t n_samples_per_process;
     const double histogram_min;
     const double histogram_sup;
     const double histogram_bin_width;
@@ -47,7 +47,7 @@ typedef struct _Histogram {
     double sup;
     double bin_width;
     double n_bins;
-    int* bins;
+    uint64_t* bins;
 } Histogram;
 
 typedef struct _Outliers {
@@ -154,7 +154,7 @@ int sampler_finisterrae(Finisterrae_params finisterrae)
     Summary_stats* mpi_processes_stats_array = (Summary_stats*)malloc(n_processes * sizeof(Summary_stats));
     Summary_stats aggregated_mpi_processes_stats;
 
-    int* aggregate_histogram_bins = (int*)calloc((size_t) finisterrae.histogram_n_bins, sizeof(int));
+    uint64_t* aggregate_histogram_bins = (uint64_t*)calloc((size_t) finisterrae.histogram_n_bins, sizeof(uint64_t));
     Histogram aggregate_histogram = { .min = finisterrae.histogram_min, .sup = finisterrae.histogram_sup, .bin_width = finisterrae.histogram_bin_width, .n_bins = finisterrae.histogram_n_bins, .bins = aggregate_histogram_bins,};
     uint64_t* seed = malloc(sizeof(uint64_t)); *seed = UINT64_MAX / 2; double s = finisterrae.sampler(seed); free(seed);
     double* os = (double*)malloc((size_t) 100 * sizeof(double)); // to-do: start with a different number of outliers
@@ -195,7 +195,7 @@ int sampler_finisterrae(Finisterrae_params finisterrae)
     // 1. Get slightly better pseudo-randomness, I think, as the threads continue and we reduce our reliance on srand
     // 2. Become more slightly more efficient, as we don't have to call and free memory constantly
 
-    for (int iter = 0; ; iter++) {
+    for (int i=0; ; i++) {
         // Wait until the finisterrae allocator kills this
 
         // sampler_parallel(sample_cost_effectiveness_cser_bps_per_million, samples, n_threads, n_samples, mpi_id+1+i*n_processes);
@@ -210,8 +210,8 @@ int sampler_finisterrae(Finisterrae_params finisterrae)
         }
 
         // Initialize individual process stats struct
-        int* individual_bins = (int*)calloc((size_t)finisterrae.histogram_n_bins, sizeof(int));
-        Histogram individual_mpi_process_histogram = { .min = finisterrae.histogram_min, .sup= finisterrae.histogram_sup, .bin_width = finisterrae.histogram_bin_width, .n_bins = finisterrae.histogram_n_bins, .bins = individual_bins, };
+        uint64_t* individual_mpi_process_histogram_bins = (uint64_t*)calloc((size_t)finisterrae.histogram_n_bins, sizeof(uint64_t));
+        Histogram individual_mpi_process_histogram = { .min = finisterrae.histogram_min, .sup= finisterrae.histogram_sup, .bin_width = finisterrae.histogram_bin_width, .n_bins = finisterrae.histogram_n_bins, .bins = individual_mpi_process_histogram_bins, };
         double* os = (double*)malloc((size_t) 100 * sizeof(double)); // to-do: start with a different number of outliers
         Outliers individual_mpi_histogram_outliers = { .os = os, .n = 0, .capacity = 100 };
         individual_mpi_process_stats = (Summary_stats) { 
@@ -228,11 +228,11 @@ int sampler_finisterrae(Finisterrae_params finisterrae)
         // Possibly, these could be done more efficiently with openmp reductions, 
         // but I don't quite understand them 
         double mean = 0.0;
-        for (int i = 0; i < n_samples; i++) { // do this serially to avoid race conditions 
-            mean += xs[i];
-            if (individual_mpi_process_stats.min > xs[i]) individual_mpi_process_stats.min = xs[i];
-            if (individual_mpi_process_stats.max < xs[i]) individual_mpi_process_stats.max = xs[i];
-            if (xs[i] < individual_mpi_process_stats.histogram.min || xs[i] >= individual_mpi_process_stats.histogram.sup) {
+        for (int k = 0; k < n_samples; k++) { // do this serially to avoid race conditions 
+            mean += xs[k];
+            if (individual_mpi_process_stats.min > xs[k]) individual_mpi_process_stats.min = xs[k];
+            if (individual_mpi_process_stats.max < xs[k]) individual_mpi_process_stats.max = xs[k];
+            if (xs[k] < individual_mpi_process_stats.histogram.min || xs[k] >= individual_mpi_process_stats.histogram.sup) {
                 if(individual_mpi_process_stats.outliers.n >= individual_mpi_process_stats.outliers.capacity){
                     int new_capacity = individual_mpi_process_stats.outliers.capacity * 2;
                     double* new_os = (double*)realloc(individual_mpi_process_stats.outliers.os, new_capacity * sizeof(double));
@@ -243,16 +243,16 @@ int sampler_finisterrae(Finisterrae_params finisterrae)
                     individual_mpi_process_stats.outliers.os = new_os;
                     individual_mpi_process_stats.outliers.capacity = new_capacity;
                 }
-                individual_mpi_process_stats.outliers.os[individual_mpi_process_stats.outliers.n] = xs[i];
+                individual_mpi_process_stats.outliers.os[individual_mpi_process_stats.outliers.n] = xs[k];
                 individual_mpi_process_stats.outliers.n++;
                 /*
-                fprintf(stderr, "xs[i] outside histogram domain: %lf\n", xs[i]);
+                fprintf(stderr, "xs[k] outside histogram domain: %lf\n", xs[k]);
                 FILE* fp = fopen("./outliers.txt", "a");
-                fprintf(fp, "%lf\n", xs[i]);
+                fprintf(fp, "%lf\n", xs[k]);
                 fclose(fp);
                 */
            } else {
-                double bin_double = (xs[i] - individual_mpi_process_stats.histogram.min)/individual_mpi_process_stats.histogram.bin_width;
+                double bin_double = (xs[k] - individual_mpi_process_stats.histogram.min)/individual_mpi_process_stats.histogram.bin_width;
                 int bin_int = (int) floor(bin_double);
                 individual_mpi_process_stats.histogram.bins[bin_int]++;
             }
@@ -262,8 +262,8 @@ int sampler_finisterrae(Finisterrae_params finisterrae)
         // One parallel loop for variance
         double var = 0.0;
         #pragma omp parallel for simd reduction(+:var) // unclear if the for simd reduction applies after we've added other items to the for loop
-        for (int i = 0; i < n_samples; i++) {
-            var += (xs[i] - individual_mpi_process_stats.mean) * (xs[i] - individual_mpi_process_stats.mean);
+        for (int m = 0; m < n_samples; m++) {
+            var += (xs[m] - individual_mpi_process_stats.mean) * (xs[m] - individual_mpi_process_stats.mean);
         }
         individual_mpi_process_stats.variance = var / n_samples;
 
@@ -280,8 +280,8 @@ int sampler_finisterrae(Finisterrae_params finisterrae)
 
         if (mpi_id == 0) {
             reduce_chunk_stats(&aggregated_mpi_processes_stats, mpi_processes_stats_array, n_processes);
-            if (iter % finisterrae.print_every_n_iters == 0){
-                printf("\nIter %3d:\n", iter);
+            if (i % finisterrae.print_every_n_iters == 0){
+                printf("\nIter %3d:\n", i);
                 print_stats(&aggregated_mpi_processes_stats);
             }
         }

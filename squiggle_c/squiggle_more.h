@@ -14,7 +14,7 @@ ci array_get_ci(ci interval, double* xs, int n);
 ci array_get_90_ci(double xs[], int n);
 void array_print_stats(double xs[], int n);
 void array_print_histogram(double* xs, int n_samples, int n_bins);
-void print_histogram(int* bins, int n_bins, double min_value, double bin_width); // underlying primitive
+void print_histogram(uint64_t* bins, int n_bins, double min_value, double bin_width); // underlying primitive
 
 // Deprecated: get confidence intervals directly from samplers
 ci sampler_get_ci(ci interval, double (*sampler)(uint64_t*), int n, uint64_t* seed);
