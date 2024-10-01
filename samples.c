@@ -49,7 +49,7 @@ typedef struct _Histogram {
     double min;
     double sup;
     double bin_width;
-    double n_bins;
+    int n_bins;
     uint64_t* bins;
 } Histogram;
 
