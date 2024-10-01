@@ -22,6 +22,9 @@
     #define N_SAMPLES_PER_PROCESS BILLION
 #endif
 
+/* Collect outliers manually? */
+#define COLLECT_OUTLIERS 0
+
 /* External interface struct */
 typedef struct _Finisterrae_params {
     const double (*sampler)(uint64_t* seed);
@@ -90,23 +93,24 @@ void reduce_chunk_stats(Summary_stats* accumulator, Summary_stats* new, int n_ch
         for (int j = 0; j < accumulator->histogram.n_bins; j++) {
             accumulator->histogram.bins[j] += new[i].histogram.bins[j];
         }
-        if(accumulator->outliers.n + new[i].outliers.n >= accumulator->outliers.capacity){
-            int new_capacity = accumulator->outliers.capacity * 2;
-            double* new_os = (double*)realloc(accumulator->outliers.os, new_capacity * sizeof(double));
-            if (new_os == NULL) {
-                printf("Memory reallocation for outliers failed\n");
-                return;
+        if (COLLECT_OUTLIERS){
+            if(accumulator->outliers.n + new[i].outliers.n >= accumulator->outliers.capacity){
+                int new_capacity = accumulator->outliers.capacity * 2;
+                double* new_os = (double*)realloc(accumulator->outliers.os, new_capacity * sizeof(double));
+                if (new_os == NULL) {
+                    printf("Memory reallocation for outliers failed\n");
+                    return;
+                }
+                accumulator->outliers.os = new_os;
+                accumulator->outliers.capacity = new_capacity;
             }
-            accumulator->outliers.os = new_os;
-            accumulator->outliers.capacity = new_capacity;
-        }
-        for(int k=0; k < new[i].outliers.n && accumulator->outliers.n < accumulator->outliers.capacity; k++){
-            accumulator->outliers.os[accumulator->outliers.n] = new[i].outliers.os[k]; 
-            accumulator->outliers.n++;
+            for(int k=0; k < new[i].outliers.n && accumulator->outliers.n < accumulator->outliers.capacity; k++){
+                accumulator->outliers.os[accumulator->outliers.n] = new[i].outliers.os[k]; 
+                accumulator->outliers.n++;
+            }
         }
     }
     accumulator->mean = sum_weighted_means / accumulator->n_samples;
-    // accumulator->histogram.outliers = new[0].histogram.outliers; // just to text printing
 }
 
 void print_stats(Summary_stats* result)
@@ -115,22 +119,13 @@ void print_stats(Summary_stats* result)
 
     print_histogram(result->histogram.bins, result->histogram.n_bins, result->histogram.min, result->histogram.bin_width);
 
-    printf("\nOutliers: ");
-    for(int i=0; i<result->outliers.n; i++){
-        printf("%lf, ", result->outliers.os[i]);
+    if(COLLECT_OUTLIERS){
+        printf("\nOutliers: ");
+        for(int i=0; i<result->outliers.n; i++){
+            printf("%lf, ", result->outliers.os[i]);
+        }
+        printf("\n");
     }
-    printf("\n");
-    
-    /*
-    struct Outliers* o = &result->histogram.outliers;
-    printf("First outlier node: { .is_last: %d, .next: %p, .val: %lf }\n", o->is_last, o->next, o->val);
-    while(o->next != NULL && o->is_last != 1){
-        o = o->next;
-        printf("Additional outlier node: { .is_last: %d, .next: %p, .val: %lf }\n", o->is_last, o->next, o->val);
-
-        printf("Slept for 1s");
-
-    }*/
 }
 
 int sampler_finisterrae(Finisterrae_params finisterrae)
@@ -157,7 +152,10 @@ int sampler_finisterrae(Finisterrae_params finisterrae)
     uint64_t* aggregate_histogram_bins = (uint64_t*)calloc((size_t) finisterrae.histogram_n_bins, sizeof(uint64_t));
     Histogram aggregate_histogram = { .min = finisterrae.histogram_min, .sup = finisterrae.histogram_sup, .bin_width = finisterrae.histogram_bin_width, .n_bins = finisterrae.histogram_n_bins, .bins = aggregate_histogram_bins,};
     uint64_t* seed = malloc(sizeof(uint64_t)); *seed = UINT64_MAX / 2; double s = finisterrae.sampler(seed); free(seed);
-    double* os = (double*)malloc((size_t) 100 * sizeof(double)); // to-do: start with a different number of outliers
+    double* os = NULL;
+    if(COLLECT_OUTLIERS){
+        os = (double*)malloc((size_t) 100 * sizeof(double)); 
+    }
     Outliers aggregate_histogram_outliers = { .os = os, .n = 0, .capacity = 100 };
     aggregated_mpi_processes_stats = (Summary_stats) { .n_samples = 1, .min = s, .max = s, .mean = s, .variance = 0, .histogram = aggregate_histogram,  .outliers = aggregate_histogram_outliers,  };
 
@@ -212,7 +210,10 @@ int sampler_finisterrae(Finisterrae_params finisterrae)
         // Initialize individual process stats struct
         uint64_t* individual_mpi_process_histogram_bins = (uint64_t*)calloc((size_t)finisterrae.histogram_n_bins, sizeof(uint64_t));
         Histogram individual_mpi_process_histogram = { .min = finisterrae.histogram_min, .sup= finisterrae.histogram_sup, .bin_width = finisterrae.histogram_bin_width, .n_bins = finisterrae.histogram_n_bins, .bins = individual_mpi_process_histogram_bins, };
-        double* os = (double*)malloc((size_t) 100 * sizeof(double)); // to-do: start with a different number of outliers
+        double* os = NULL;
+        if(COLLECT_OUTLIERS){
+            os = (double*)malloc((size_t) 100 * sizeof(double)); 
+        }
         Outliers individual_mpi_histogram_outliers = { .os = os, .n = 0, .capacity = 100 };
         individual_mpi_process_stats = (Summary_stats) { 
             .n_samples = n_samples, 
@@ -232,7 +233,7 @@ int sampler_finisterrae(Finisterrae_params finisterrae)
             mean += xs[k];
             if (individual_mpi_process_stats.min > xs[k]) individual_mpi_process_stats.min = xs[k];
             if (individual_mpi_process_stats.max < xs[k]) individual_mpi_process_stats.max = xs[k];
-            if (xs[k] < individual_mpi_process_stats.histogram.min || xs[k] >= individual_mpi_process_stats.histogram.sup) {
+            if (COLLECT_OUTLIERS && (xs[k] < individual_mpi_process_stats.histogram.min || xs[k] >= individual_mpi_process_stats.histogram.sup)) {
                 if(individual_mpi_process_stats.outliers.n >= individual_mpi_process_stats.outliers.capacity){
                     int new_capacity = individual_mpi_process_stats.outliers.capacity * 2;
                     double* new_os = (double*)realloc(individual_mpi_process_stats.outliers.os, new_capacity * sizeof(double));
@@ -245,12 +246,6 @@ int sampler_finisterrae(Finisterrae_params finisterrae)
                 }
                 individual_mpi_process_stats.outliers.os[individual_mpi_process_stats.outliers.n] = xs[k];
                 individual_mpi_process_stats.outliers.n++;
-                /*
-                fprintf(stderr, "xs[k] outside histogram domain: %lf\n", xs[k]);
-                FILE* fp = fopen("./outliers.txt", "a");
-                fprintf(fp, "%lf\n", xs[k]);
-                fclose(fp);
-                */
            } else {
                 double bin_double = (xs[k] - individual_mpi_process_stats.histogram.min)/individual_mpi_process_stats.histogram.bin_width;
                 int bin_int = (int) floor(bin_double);
@@ -296,9 +291,9 @@ int main(int argc, char** argv)
         .sampler = sample_cost_effectiveness_sentinel_bps_per_million, 
         .n_samples_per_process = N_SAMPLES_PER_PROCESS,
         .histogram_min = 0,
-        .histogram_sup = 400,
-        .histogram_bin_width = 1,
-        .histogram_n_bins = 400,
+        .histogram_sup = 5,
+        .histogram_bin_width = 0.01,
+        .histogram_n_bins = 500,
         .print_every_n_iters = 10,
     });
     return 0;
