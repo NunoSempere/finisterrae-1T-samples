@@ -8,18 +8,22 @@
 #include "squiggle_c/squiggle_more.h"
 #include "model.h"
 
+#define MILLION (1000 * 1000)
+#define BILLION (1000 * MILLION)
+#define TRILLION (1000 * BILLION)
+
 // Macro to be able to run part of the code in a system without MPI
 #define NO_MPI // Comment out if running on an MPI system
 #ifdef NO_MPI
     #define IF_MPI(x)
     #define IF_NO_MPI(x) x
     #define MPI_Status int
-    #define N_SAMPLES_PER_PROCESS 1000000
+    #define N_SAMPLES_PER_PROCESS MILLION
 #else
     #include "mpi.h" /* N: why is this "mpi.h" and not <mpi.h> ??? */
     #define IF_MPI(x) x
     #define IF_NO_MPI(x)
-    #define N_SAMPLES_PER_PROCESS 1000000000
+    #define N_SAMPLES_PER_PROCESS BILLION
 #endif
 
 /* External interface struct */
@@ -111,7 +115,7 @@ void reduce_chunk_stats(Summary_stats* accumulator, Summary_stats* new, int n_ch
 
 void print_stats(Summary_stats* result)
 {
-    printf("Result {\n  N_samples: %luM\n  Min:  %4.3lf\n  Max:  %4.3lf\n  Mean: %4.3lf\n  Var:  %4.3lf\n}\n", result->n_samples/1000000, result->min, result->max, result->mean, result->variance);
+    printf("Result {\n  N_samples: %luM\n  Min:  %15.10lf\n  Max:  %15.10lf\n  Mean: %15.10lf\n  Var:  %15.10lf\n}\n", result->n_samples/MILLION, result->min, result->max, result->mean, result->variance);
 
     print_histogram(result->histogram.bins, result->histogram.n_bins, result->histogram.min, result->histogram.bin_width);
 
@@ -299,7 +303,7 @@ int main(int argc, char** argv)
         .histogram_sup = 400,
         .histogram_bin_width = 1,
         .histogram_n_bins = 400,
-        .print_every_n_iters = 100,
+        .print_every_n_iters = 10,
     });
     return 0;
 }

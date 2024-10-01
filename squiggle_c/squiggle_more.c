@@ -167,6 +167,9 @@ void print_histogram(uint64_t* bins, int n_bins, double min_value, double bin_wi
 
     // Print the histogram
     for (int i = 0; i < n_bins; i++) {
+        if (bins[i] == 0){
+            continue;
+        }
         double bin_start = min_value + i * bin_width;
         double bin_end = bin_start + bin_width;
         if(bin_width < 0.01){
