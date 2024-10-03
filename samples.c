@@ -23,7 +23,7 @@
 #endif
 
 /* Collect outliers manually? */
-#define COLLECT_OUTLIERS 0
+#define COLLECT_OUTLIERS 1
 
 /* External interface struct */
 typedef struct _Finisterrae_params {
@@ -121,6 +121,9 @@ void print_stats(Summary_stats* result)
 
     if(COLLECT_OUTLIERS){
         printf("\nOutliers: ");
+        if(result->outliers.n == 0){
+            printf("Ø");
+        }
         for(int i=0; i<result->outliers.n; i++){
             printf("%lf, ", result->outliers.os[i]);
         }
