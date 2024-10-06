@@ -24,7 +24,7 @@
 #endif
 
 /* Collect outliers manually? */
-#define COLLECT_OUTLIERS 1
+#define COLLECT_OUTLIERS 0
 
 /* External interface struct */
 typedef struct _Finisterrae_params {
