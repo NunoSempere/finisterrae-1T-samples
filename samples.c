@@ -301,7 +301,8 @@ int sampler_finisterrae(Finisterrae_params finisterrae)
         IF_NO_MPI(mpi_processes_stats_array[0] = individual_mpi_process_stats);
 
 	if (mpi_id == 0) {
-
+	for (int p=0; p<n_processes; p++)
+	print_stats(mpi_processes_stats_array+p);
 	return 0;
             reduce_chunk_stats(&aggregated_mpi_processes_stats, mpi_processes_stats_array, n_processes);
             if (i % finisterrae.print_every_n_iters == 0) {
