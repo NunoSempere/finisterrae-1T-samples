@@ -138,7 +138,7 @@ int sampler_finisterrae(Finisterrae_params finisterrae)
     // START MPI ENVIRONMENT
     int mpi_id = 0, n_processes = 1;
     MPI_Status status;
-    IF_MPI(MPI_Init());
+    IF_MPI(MPI_Init(NULL, NULL));
     IF_MPI(MPI_Comm_size(MPI_COMM_WORLD, &n_processes));
     IF_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_id));
 
