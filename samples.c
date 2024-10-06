@@ -179,7 +179,6 @@ int sampler_finisterrae(Finisterrae_params finisterrae)
         .histogram = aggregate_histogram,
         .outliers = aggregate_histogram_outliers,
     };
-
     // Get the number of threads
     int n_threads;
     #pragma omp parallel // Create a parallel environment to see how many threads are in it
@@ -301,7 +300,9 @@ int sampler_finisterrae(Finisterrae_params finisterrae)
         IF_MPI(MPI_Gather(&individual_mpi_process_stats, sizeof(Summary_stats), MPI_CHAR, mpi_processes_stats_array, sizeof(Summary_stats), MPI_CHAR, 0, MPI_COMM_WORLD));
         IF_NO_MPI(mpi_processes_stats_array[0] = individual_mpi_process_stats);
 
-        if (mpi_id == 0) {
+	if (mpi_id == 0) {
+
+	return 0;
             reduce_chunk_stats(&aggregated_mpi_processes_stats, mpi_processes_stats_array, n_processes);
             if (i % finisterrae.print_every_n_iters == 0) {
                 printf("\nIter %3d:\n", i);
