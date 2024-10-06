@@ -317,8 +317,8 @@ int main(int argc, char** argv)
 {
     sampler_finisterrae((Finisterrae_params) {
         .sampler = sample_cost_effectiveness_sentinel_bps_per_million,
-        .n_samples_per_process = N_SAMPLES_PER_PROCESS,
-        .n_samples_total = TRILLION,
+        .n_samples_per_process = 100*THOUSAND,
+        .n_samples_total = 10*MILLION,
         .histogram_min = 0,
         .histogram_sup = 300,
         .histogram_bin_width = 1,
