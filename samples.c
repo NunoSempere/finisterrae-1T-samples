@@ -4,22 +4,22 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "model.h"
 #include "squiggle_c/squiggle.h"
 #include "squiggle_c/squiggle_more.h"
-#include "model.h"
 
 // Macro to be able to run part of the code in a system without MPI
 // #define NO_MPI // Comment out if running on an MPI system
 #ifdef NO_MPI
-    #define IF_MPI(x)
-    #define IF_NO_MPI(x) x
-    #define MPI_Status int
-    #define N_SAMPLES_PER_PROCESS MILLION
+#define IF_MPI(x)
+#define IF_NO_MPI(x) x
+#define MPI_Status int
+#define N_SAMPLES_PER_PROCESS MILLION
 #else
-    #include "mpi.h" /* N: why is this "mpi.h" and not <mpi.h> ??? */
-    #define IF_MPI(x) x
-    #define IF_NO_MPI(x)
-    #define N_SAMPLES_PER_PROCESS BILLION
+#include "mpi.h" /* N: why is this "mpi.h" and not <mpi.h> ??? */
+#define IF_MPI(x) x
+#define IF_NO_MPI(x)
+#define N_SAMPLES_PER_PROCESS BILLION
 #endif
 
 /* Collect outliers manually? */
@@ -36,14 +36,13 @@ typedef struct _Finisterrae_params {
     const int print_every_n_iters;
 } Finisterrae_params;
 
-/* Internal interface structs */ 
+/* Internal interface structs */
 #define CACHE_LINE_SIZE 64
 typedef struct _seed_cache_box {
     uint64_t seed;
     char padding[CACHE_LINE_SIZE - sizeof(uint64_t)];
     // Cache line size is 64 *bytes*, uint64_t is 64 *bits* (8 bytes). Different units!
 } seed_cache_box;
-
 
 typedef struct _Histogram {
     double min;
@@ -84,7 +83,7 @@ void reduce_chunk_stats(Summary_stats* accumulator, Summary_stats* new, int n_ch
 {
     double sum_weighted_means = accumulator->mean * accumulator->n_samples;
     for (int i = 0; i < n_chunks; i++) {
-        sum_weighted_means += new[i].mean * new[i].n_samples;
+        sum_weighted_means += new[i].mean* new[i].n_samples;
         accumulator->n_samples += new[i].n_samples;
         accumulator->mean = sum_weighted_means / accumulator->n_samples; // need this for the variance calculations
         accumulator->variance = combine_variances(accumulator, new + i);
@@ -93,8 +92,8 @@ void reduce_chunk_stats(Summary_stats* accumulator, Summary_stats* new, int n_ch
         for (int j = 0; j < accumulator->histogram.n_bins; j++) {
             accumulator->histogram.bins[j] += new[i].histogram.bins[j];
         }
-        if (COLLECT_OUTLIERS){
-            if(accumulator->outliers.n + new[i].outliers.n >= accumulator->outliers.capacity){
+        if (COLLECT_OUTLIERS) {
+            if (accumulator->outliers.n + new[i].outliers.n >= accumulator->outliers.capacity) {
                 int new_capacity = accumulator->outliers.capacity * 2;
                 double* new_os = (double*)realloc(accumulator->outliers.os, new_capacity * sizeof(double));
                 if (new_os == NULL) {
@@ -104,8 +103,8 @@ void reduce_chunk_stats(Summary_stats* accumulator, Summary_stats* new, int n_ch
                 accumulator->outliers.os = new_os;
                 accumulator->outliers.capacity = new_capacity;
             }
-            for(int k=0; k < new[i].outliers.n && accumulator->outliers.n < accumulator->outliers.capacity; k++){
-                accumulator->outliers.os[accumulator->outliers.n] = new[i].outliers.os[k]; 
+            for (int k = 0; k < new[i].outliers.n && accumulator->outliers.n < accumulator->outliers.capacity; k++) {
+                accumulator->outliers.os[accumulator->outliers.n] = new[i].outliers.os[k];
                 accumulator->outliers.n++;
             }
         }
@@ -115,16 +114,16 @@ void reduce_chunk_stats(Summary_stats* accumulator, Summary_stats* new, int n_ch
 
 void print_stats(Summary_stats* result)
 {
-    printf("Result {\n  N_samples: %luM\n  Min:  %15.10lf\n  Max:  %15.10lf\n  Mean: %15.10lf\n  Var:  %15.10lf\n}\n", result->n_samples/MILLION, result->min, result->max, result->mean, result->variance);
+    printf("Result {\n  N_samples: %luM\n  Min:  %15.10lf\n  Max:  %15.10lf\n  Mean: %15.10lf\n  Var:  %15.10lf\n}\n", result->n_samples / MILLION, result->min, result->max, result->mean, result->variance);
 
     print_histogram(result->histogram.bins, result->histogram.n_bins, result->histogram.min, result->histogram.bin_width);
 
-    if(COLLECT_OUTLIERS){
+    if (COLLECT_OUTLIERS) {
         printf("\nOutliers: ");
-        if(result->outliers.n == 0){
+        if (result->outliers.n == 0) {
             printf("Ø");
         }
-        for(int i=0; i<result->outliers.n; i++){
+        for (int i = 0; i < result->outliers.n; i++) {
             printf("%lf, ", result->outliers.os[i]);
         }
         printf("\n");
@@ -152,20 +151,37 @@ int sampler_finisterrae(Finisterrae_params finisterrae)
     Summary_stats* mpi_processes_stats_array = (Summary_stats*)malloc(n_processes * sizeof(Summary_stats));
     Summary_stats aggregated_mpi_processes_stats;
 
-    uint64_t* aggregate_histogram_bins = (uint64_t*)calloc((size_t) finisterrae.histogram_n_bins, sizeof(uint64_t));
-    Histogram aggregate_histogram = { .min = finisterrae.histogram_min, .sup = finisterrae.histogram_sup, .bin_width = finisterrae.histogram_bin_width, .n_bins = finisterrae.histogram_n_bins, .bins = aggregate_histogram_bins,};
-    uint64_t* seed = malloc(sizeof(uint64_t)); *seed = UINT64_MAX / 2; double s = finisterrae.sampler(seed); free(seed);
+    uint64_t* aggregate_histogram_bins = (uint64_t*)calloc((size_t)finisterrae.histogram_n_bins, sizeof(uint64_t));
+    Histogram aggregate_histogram = {
+        .min = finisterrae.histogram_min,
+        .sup = finisterrae.histogram_sup,
+        .bin_width = finisterrae.histogram_bin_width,
+        .n_bins = finisterrae.histogram_n_bins,
+        .bins = aggregate_histogram_bins,
+    };
+    uint64_t* seed = malloc(sizeof(uint64_t));
+    *seed = UINT64_MAX / 2;
+    double s = finisterrae.sampler(seed);
+    free(seed);
     double* os = NULL;
-    if(COLLECT_OUTLIERS){
-        os = (double*)malloc((size_t) 100 * sizeof(double)); 
+    if (COLLECT_OUTLIERS) {
+        os = (double*)malloc((size_t)100 * sizeof(double));
     }
     Outliers aggregate_histogram_outliers = { .os = os, .n = 0, .capacity = 100 };
-    aggregated_mpi_processes_stats = (Summary_stats) { .n_samples = 1, .min = s, .max = s, .mean = s, .variance = 0, .histogram = aggregate_histogram,  .outliers = aggregate_histogram_outliers,  };
+    aggregated_mpi_processes_stats = (Summary_stats) {
+        .n_samples = 1,
+        .min = s,
+        .max = s,
+        .mean = s,
+        .variance = 0,
+        .histogram = aggregate_histogram,
+        .outliers = aggregate_histogram_outliers,
+    };
 
     // Get the number of threads
     int n_threads;
-    #pragma omp parallel // Create a parallel environment to see how many threads are in it
-    #pragma omp single   // But only print it one time in that paralllel region
+#pragma omp parallel // Create a parallel environment to see how many threads are in it
+#pragma omp single // But only print it one time in that paralllel region
     {
         n_threads = omp_get_num_threads();
         printf("Num threads on process %d: %d\n", mpi_id, n_threads);
@@ -187,7 +203,7 @@ int sampler_finisterrae(Finisterrae_params finisterrae)
     }
     int n_samples = finisterrae.n_samples_per_process; /* these are per mpi process, distributed between threads  */
     double* xs = (double*)malloc((size_t)n_samples * sizeof(double));
-    double* samples = (double*) malloc((size_t)n_samples * sizeof(double));
+    double* samples = (double*)malloc((size_t)n_samples * sizeof(double));
     if (samples == NULL) {
         fprintf(stderr, "Memory allocation for samples failed.\n");
         return 1;
@@ -196,14 +212,14 @@ int sampler_finisterrae(Finisterrae_params finisterrae)
     // 1. Get slightly better pseudo-randomness, I think, as the threads continue and we reduce our reliance on srand
     // 2. Become more slightly more efficient, as we don't have to call and free memory constantly
 
-    for (int i=0; ; i++) {
-        // Wait until the finisterrae allocator kills this
+    for (int i = 0;; i++) {
+// Wait until the finisterrae allocator kills this
 
-        // sampler_parallel(sample_cost_effectiveness_cser_bps_per_million, samples, n_threads, n_samples, mpi_id+1+i*n_processes);
-        // do this inline instead of calling to the sampler_parallel function
+// sampler_parallel(sample_cost_effectiveness_cser_bps_per_million, samples, n_threads, n_samples, mpi_id+1+i*n_processes);
+// do this inline instead of calling to the sampler_parallel function
 
-        // One parallel loop to get the samples
-        #pragma omp parallel for
+// One parallel loop to get the samples
+#pragma omp parallel for
         for (int j = 0; j < n_samples; j++) {
             int thread_id = omp_get_thread_num();
             // Can we get the minimum and maximum here? Not quite straightforwardly, because we have different threads operating independently
@@ -212,32 +228,38 @@ int sampler_finisterrae(Finisterrae_params finisterrae)
 
         // Initialize individual process stats struct
         uint64_t* individual_mpi_process_histogram_bins = (uint64_t*)calloc((size_t)finisterrae.histogram_n_bins, sizeof(uint64_t));
-        Histogram individual_mpi_process_histogram = { .min = finisterrae.histogram_min, .sup= finisterrae.histogram_sup, .bin_width = finisterrae.histogram_bin_width, .n_bins = finisterrae.histogram_n_bins, .bins = individual_mpi_process_histogram_bins, };
+        Histogram individual_mpi_process_histogram = {
+            .min = finisterrae.histogram_min,
+            .sup = finisterrae.histogram_sup,
+            .bin_width = finisterrae.histogram_bin_width,
+            .n_bins = finisterrae.histogram_n_bins,
+            .bins = individual_mpi_process_histogram_bins,
+        };
         double* os = NULL;
-        if(COLLECT_OUTLIERS){
-            os = (double*)malloc((size_t) 100 * sizeof(double)); 
+        if (COLLECT_OUTLIERS) {
+            os = (double*)malloc((size_t)100 * sizeof(double));
         }
         Outliers individual_mpi_histogram_outliers = { .os = os, .n = 0, .capacity = 100 };
-        individual_mpi_process_stats = (Summary_stats) { 
-            .n_samples = n_samples, 
-            .min = xs[0], 
+        individual_mpi_process_stats = (Summary_stats) {
+            .n_samples = n_samples,
+            .min = xs[0],
             .max = xs[0],
-            .mean = 0.0, 
+            .mean = 0.0,
             .variance = 0.0,
-            .histogram = individual_mpi_process_histogram, 
+            .histogram = individual_mpi_process_histogram,
             .outliers = individual_mpi_histogram_outliers,
         };
 
         // One serial loop for mean, min, max & histogram
-        // Possibly, these could be done more efficiently with openmp reductions, 
-        // but I don't quite understand them 
+        // Possibly, these could be done more efficiently with openmp reductions,
+        // but I don't quite understand them
         double mean = 0.0;
-        for (int k = 0; k < n_samples; k++) { // do this serially to avoid race conditions 
+        for (int k = 0; k < n_samples; k++) { // do this serially to avoid race conditions
             mean += xs[k];
             if (individual_mpi_process_stats.min > xs[k]) individual_mpi_process_stats.min = xs[k];
             if (individual_mpi_process_stats.max < xs[k]) individual_mpi_process_stats.max = xs[k];
             if (COLLECT_OUTLIERS && (xs[k] < individual_mpi_process_stats.histogram.min || xs[k] >= individual_mpi_process_stats.histogram.sup)) {
-                if(individual_mpi_process_stats.outliers.n >= individual_mpi_process_stats.outliers.capacity){
+                if (individual_mpi_process_stats.outliers.n >= individual_mpi_process_stats.outliers.capacity) {
                     int new_capacity = individual_mpi_process_stats.outliers.capacity * 2;
                     double* new_os = (double*)realloc(individual_mpi_process_stats.outliers.os, new_capacity * sizeof(double));
                     if (new_os == NULL) {
@@ -249,17 +271,18 @@ int sampler_finisterrae(Finisterrae_params finisterrae)
                 }
                 individual_mpi_process_stats.outliers.os[individual_mpi_process_stats.outliers.n] = xs[k];
                 individual_mpi_process_stats.outliers.n++;
-           } else {
-                double bin_double = (xs[k] - individual_mpi_process_stats.histogram.min)/individual_mpi_process_stats.histogram.bin_width;
-                int bin_int = (int) floor(bin_double);
+            } else {
+                double bin_double = (xs[k] - individual_mpi_process_stats.histogram.min) / individual_mpi_process_stats.histogram.bin_width;
+                int bin_int = (int)floor(bin_double);
                 individual_mpi_process_stats.histogram.bins[bin_int]++;
             }
         }
-        individual_mpi_process_stats.mean = mean/n_samples;
+        individual_mpi_process_stats.mean = mean / n_samples;
 
         // One parallel loop for variance
         double var = 0.0;
-        #pragma omp parallel for simd reduction(+:var) // unclear if the for simd reduction applies after we've added other items to the for loop
+#pragma omp parallel for simd reduction(+ \
+                                        : var) // unclear if the for simd reduction applies after we've added other items to the for loop
         for (int m = 0; m < n_samples; m++) {
             var += (xs[m] - individual_mpi_process_stats.mean) * (xs[m] - individual_mpi_process_stats.mean);
         }
@@ -278,7 +301,7 @@ int sampler_finisterrae(Finisterrae_params finisterrae)
 
         if (mpi_id == 0) {
             reduce_chunk_stats(&aggregated_mpi_processes_stats, mpi_processes_stats_array, n_processes);
-            if (i % finisterrae.print_every_n_iters == 0){
+            if (i % finisterrae.print_every_n_iters == 0) {
                 printf("\nIter %3d:\n", i);
                 print_stats(&aggregated_mpi_processes_stats);
             }
@@ -291,7 +314,7 @@ int sampler_finisterrae(Finisterrae_params finisterrae)
 int main(int argc, char** argv)
 {
     sampler_finisterrae((Finisterrae_params) {
-        .sampler = sample_cost_effectiveness_sentinel_bps_per_million, 
+        .sampler = sample_cost_effectiveness_sentinel_bps_per_million,
         .n_samples_per_process = N_SAMPLES_PER_PROCESS,
         .histogram_min = 0,
         .histogram_sup = 300,
@@ -299,13 +322,13 @@ int main(int argc, char** argv)
         .histogram_n_bins = 300,
         .print_every_n_iters = 10,
     });
-    // Two types of histogram: 
+    // Two types of histogram:
     // 1. Exploring the main part of the distribution
-    // 2. Exploring the long tail. 
+    // 2. Exploring the long tail.
     // We are interested in both, but for the 1T samples we are interested in the long tail
     /* For main part of the distribution:
     sampler_finisterrae((Finisterrae_params) {
-        .sampler = sample_cost_effectiveness_sentinel_bps_per_million, 
+        .sampler = sample_cost_effectiveness_sentinel_bps_per_million,
         .n_samples_per_process = N_SAMPLES_PER_PROCESS,
         .histogram_min = 0,
         .histogram_sup = 1,
