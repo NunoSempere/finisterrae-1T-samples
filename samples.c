@@ -294,9 +294,9 @@ int main(int argc, char** argv)
         .sampler = sample_cost_effectiveness_sentinel_bps_per_million, 
         .n_samples_per_process = N_SAMPLES_PER_PROCESS,
         .histogram_min = 0,
-        .histogram_sup = 100,
+        .histogram_sup = 300,
         .histogram_bin_width = 1,
-        .histogram_n_bins = 100,
+        .histogram_n_bins = 300,
         .print_every_n_iters = 10,
     });
     // Two types of histogram: 

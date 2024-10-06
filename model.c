@@ -16,7 +16,7 @@ double sample_cost_effectiveness_sentinel_bps_per_million(uint64_t * seed){
     double chance_black_swan_is_catastrophic = sample_beta(3, 100, seed);
     double chance_we_can_avert_or_mitigate_catastrophic_risk = sample_beta(2, 100, seed);
 
-    double catastrophic_to_existential_conversion_factor = sample_to(10, 1000, seed);
+    double catastrophic_to_existential_conversion_factor = 100; // sample_to(10, 1000, seed);
 
     double existential_risk_equivalents_averted_per_black_swan = (chance_black_swan_is_existential * chance_we_can_avert_or_mitigate_existential_risk) + (chance_black_swan_is_catastrophic * chance_we_can_avert_or_mitigate_catastrophic_risk / catastrophic_to_existential_conversion_factor);
 
