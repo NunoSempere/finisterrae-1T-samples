@@ -164,8 +164,8 @@ int sampler_finisterrae(Finisterrae_params finisterrae)
 
     // Get the number of threads
     int n_threads;
-    #pragma omp parallel /* N: I don't quite understand what this directive is doing. */
-    #pragma omp single
+    #pragma omp parallel // Create a parallel environment to see how many threads are in it
+    #pragma omp single   // But only print it one time in that paralllel region
     {
         n_threads = omp_get_num_threads();
         printf("Num threads on process %d: %d\n", mpi_id, n_threads);
