@@ -20,6 +20,7 @@
 #define IF_MPI(x) x
 #define IF_NO_MPI(x)
 #define N_SAMPLES_PER_PROCESS BILLION
+#define uint64_t u_int64_t
 #endif
 
 /* Collect outliers manually? */
@@ -137,7 +138,7 @@ int sampler_finisterrae(Finisterrae_params finisterrae)
     // START MPI ENVIRONMENT
     int mpi_id = 0, n_processes = 1;
     MPI_Status status;
-    IF_MPI(MPI_Init(&argc, &argv));
+    IF_MPI(MPI_Init());
     IF_MPI(MPI_Comm_size(MPI_COMM_WORLD, &n_processes));
     IF_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_id));
 

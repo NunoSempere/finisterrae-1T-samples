@@ -1,9 +1,4 @@
-#include "squiggle_c/squiggle.h"
-#include "squiggle_c/squiggle_more.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <float.h>
-#include <math.h>
+#include "model.h"
 
 double sample_cost_effectiveness_sentinel_bps_per_million(uint64_t * seed){
     double total_amount_xrisk = sample_beta(2, 20, seed);
