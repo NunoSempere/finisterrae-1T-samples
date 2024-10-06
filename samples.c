@@ -298,14 +298,14 @@ int sampler_finisterrae(Finisterrae_params finisterrae)
 
         MPI_Barrier(MPI_COMM_WORLD);
         IF_MPI(MPI_Gather(&individual_mpi_process_stats, sizeof(Summary_stats), MPI_CHAR, mpi_processes_stats_array, sizeof(Summary_stats), MPI_CHAR, 0, MPI_COMM_WORLD));
-        uint64_t *all_bins = (uint64_t*) malloc(finisterrae.histogram_n_bins * n_processes);
+        uint64_t *all_bins = (uint64_t*) calloc(finisterrae.histogram_n_bins * n_processes * sizeof(uint64_t));
         IF_MPI(MPI_Gather(&(individual_mpi_process_stats.histogram.bins), finisterrae.histogram_n_bins*sizeof(uint64_t), MPI_CHAR, all_bins, finisterrae.histogram_n_bins*sizeof(uint64_t), MPI_CHAR, 0, MPI_COMM_WORLD));
         
         IF_NO_MPI(mpi_processes_stats_array[0] = individual_mpi_process_stats);
 
 	if (mpi_id == 0) {
 	for (int p=0; p<n_processes; p++){
-            IF_MPI(mpi_processes_stats_array[p].histogram.bins = all_bins+p*finisterrae.histogram_n_bins);
+        IF_MPI(mpi_processes_stats_array[p].histogram.bins = all_bins+p*finisterrae.histogram_n_bins);
 		print_stats(mpi_processes_stats_array+p);
 	}
 	return 0;
