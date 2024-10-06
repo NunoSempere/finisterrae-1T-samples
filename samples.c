@@ -213,7 +213,7 @@ int sampler_finisterrae(Finisterrae_params finisterrae)
     // 1. Get slightly better pseudo-randomness, I think, as the threads continue and we reduce our reliance on srand
     // 2. Become more slightly more efficient, as we don't have to call and free memory constantly
 
-    for (int i = 0; finisterrae.n_samples_total / finisterrae.n_samples_per_process + finisterrae.print_every_n_iters+1; i++) {
+    for (int i = 0; i < finisterrae.n_samples_total / finisterrae.n_samples_per_process + finisterrae.print_every_n_iters+1; i++) {
         // Wait until the finisterrae allocator kills this
 
         // sampler_parallel(sample_cost_effectiveness_cser_bps_per_million, samples, n_threads, n_samples, mpi_id+1+i*n_processes);
@@ -305,10 +305,9 @@ int sampler_finisterrae(Finisterrae_params finisterrae)
 
 	if (mpi_id == 0) {
 	for (int p=0; p<n_processes; p++){
-        IF_MPI(mpi_processes_stats_array[p].histogram.bins = all_bins+p*finisterrae.histogram_n_bins);
-		print_stats(mpi_processes_stats_array+p);
+        	IF_MPI(mpi_processes_stats_array[p].histogram.bins = all_bins+p*finisterrae.histogram_n_bins);
+		//print_stats(mpi_processes_stats_array+p);
 	}
-	return 0;
             reduce_chunk_stats(&aggregated_mpi_processes_stats, mpi_processes_stats_array, n_processes);
             if (i % finisterrae.print_every_n_iters == 0) {
                 printf("\nIter %3d:\n", i);
