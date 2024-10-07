@@ -181,8 +181,8 @@ int sampler_finisterrae(Finisterrae_params finisterrae)
     };
     // Get the number of threads
     int n_threads;
-#pragma omp parallel // Create a parallel environment to see how many threads are in it
-#pragma omp single // But only print it one time in that paralllel region
+    #pragma omp parallel // Create a parallel environment to see how many threads are in it
+    #pragma omp single // But only print it one time in that paralllel region
     {
         n_threads = omp_get_num_threads();
         printf("Num threads on process %d: %d\n", mpi_id, n_threads);
@@ -213,14 +213,15 @@ int sampler_finisterrae(Finisterrae_params finisterrae)
     // 1. Get slightly better pseudo-randomness, I think, as the threads continue and we reduce our reliance on srand
     // 2. Become more slightly more efficient, as we don't have to call and free memory constantly
 
-    for (int i = 0; i < finisterrae.n_samples_total / finisterrae.n_samples_per_process + finisterrae.print_every_n_iters + 1; i++) {
-// Wait until the finisterrae allocator kills this
+    uint64_t* all_bins = (uint64_t*)calloc(finisterrae.histogram_n_bins * n_processes, sizeof(uint64_t));
+    for (int i = 0; i < finisterrae.n_samples_total / (finisterrae.n_samples_per_process*n_processes) ; i++) {
+        // Wait until the finisterrae allocator kills this
 
-// sampler_parallel(sample_cost_effectiveness_cser_bps_per_million, samples, n_threads, n_samples, mpi_id+1+i*n_processes);
-// do this inline instead of calling to the sampler_parallel function
+        // sampler_parallel(sample_cost_effectiveness_cser_bps_per_million, samples, n_threads, n_samples, mpi_id+1+i*n_processes);
+        // do this inline instead of calling to the sampler_parallel function
 
-// One parallel loop to get the samples
-#pragma omp parallel for
+        // One parallel loop to get the samples
+        #pragma omp parallel for
         for (int j = 0; j < n_samples; j++) {
             int thread_id = omp_get_thread_num();
             // Can we get the minimum and maximum here? Not quite straightforwardly, because we have different threads operating independently
@@ -282,8 +283,7 @@ int sampler_finisterrae(Finisterrae_params finisterrae)
 
         // One parallel loop for variance
         double var = 0.0;
-#pragma omp parallel for simd reduction(+ \
-                                        : var) // unclear if the for simd reduction applies after we've added other items to the for loop
+        #pragma omp parallel for simd reduction(+ : var) // unclear if the for simd reduction applies after we've added other items to the for loop
         for (int m = 0; m < n_samples; m++) {
             var += (xs[m] - individual_mpi_process_stats.mean) * (xs[m] - individual_mpi_process_stats.mean);
         }
@@ -298,7 +298,6 @@ int sampler_finisterrae(Finisterrae_params finisterrae)
 
         MPI_Barrier(MPI_COMM_WORLD);
         IF_MPI(MPI_Gather(&individual_mpi_process_stats, sizeof(Summary_stats), MPI_CHAR, mpi_processes_stats_array, sizeof(Summary_stats), MPI_CHAR, 0, MPI_COMM_WORLD));
-        uint64_t* all_bins = (uint64_t*)calloc(finisterrae.histogram_n_bins * n_processes, sizeof(uint64_t));
         IF_MPI(MPI_Gather(individual_mpi_process_stats.histogram.bins, finisterrae.histogram_n_bins * sizeof(uint64_t), MPI_CHAR, all_bins, finisterrae.histogram_n_bins * sizeof(uint64_t), MPI_CHAR, 0, MPI_COMM_WORLD));
 
         IF_NO_MPI(mpi_processes_stats_array[0] = individual_mpi_process_stats);
@@ -316,6 +315,7 @@ int sampler_finisterrae(Finisterrae_params finisterrae)
         }
     }
     free(cache_box); // should never be reached, really
+    free(all_bins);
     return 0;
 }
 
@@ -323,7 +323,7 @@ int main(int argc, char** argv)
 {
     sampler_finisterrae((Finisterrae_params) {
         .sampler = sample_cost_effectiveness_sentinel_bps_per_million,
-        .n_samples_per_process = 100 * THOUSAND,
+        .n_samples_per_process = 1 * MILLION,
         .n_samples_total = 10 * MILLION,
         .histogram_min = 0,
         .histogram_sup = 300,
