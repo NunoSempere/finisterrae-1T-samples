@@ -29,8 +29,8 @@
 /* External interface struct */
 typedef struct _Finisterrae_params {
     const double (*sampler)(uint64_t* seed);
-    const int64_t n_samples_per_process;
-    const int64_t n_samples_total;
+    const uint64_t n_samples_per_process;
+    const uint64_t n_samples_total;
     const double histogram_min;
     const double histogram_sup;
     const double histogram_bin_width;
@@ -214,7 +214,7 @@ int sampler_finisterrae(Finisterrae_params finisterrae)
     // 2. Become more slightly more efficient, as we don't have to call and free memory constantly
 
     uint64_t* all_bins = (uint64_t*)calloc(finisterrae.histogram_n_bins * n_processes, sizeof(uint64_t));
-    for (int i = 0; i < finisterrae.n_samples_total / (finisterrae.n_samples_per_process*n_processes) ; i++) {
+    for (int i = 0; i < finisterrae.n_samples_total / (finisterrae.n_samples_per_process*n_processes)+1 ; i++) {
         // Wait until the finisterrae allocator kills this
 
         // sampler_parallel(sample_cost_effectiveness_cser_bps_per_million, samples, n_threads, n_samples, mpi_id+1+i*n_processes);
@@ -255,12 +255,15 @@ int sampler_finisterrae(Finisterrae_params finisterrae)
         // One serial loop for mean, min, max & histogram
         // Possibly, these could be done more efficiently with openmp reductions,
         // but I don't quite understand them
-        double mean = 0.0;
-        for (int k = 0; k < n_samples; k++) { // do this serially to avoid race conditions
+        double mean, min, max;
+	#pragma omp parallel for reduction (+ : mean) reduction(min : min) reduction(max : max) 
+        for (int k = 0; k < n_samples; k++) {
             mean += xs[k];
-            if (individual_mpi_process_stats.min > xs[k]) individual_mpi_process_stats.min = xs[k];
-            if (individual_mpi_process_stats.max < xs[k]) individual_mpi_process_stats.max = xs[k];
-            if (COLLECT_OUTLIERS && (xs[k] < individual_mpi_process_stats.histogram.min || xs[k] >= individual_mpi_process_stats.histogram.sup)) {
+            if (min > xs[k]) min = xs[k];
+            if (max < xs[k]) max = xs[k];
+        }
+	for (int k=0; k < n_samples; k++) { // do this serially to avoid race conditions
+	    if (COLLECT_OUTLIERS && (xs[k] < individual_mpi_process_stats.histogram.min || xs[k] >= individual_mpi_process_stats.histogram.sup)) {
                 if (individual_mpi_process_stats.outliers.n >= individual_mpi_process_stats.outliers.capacity) {
                     int new_capacity = individual_mpi_process_stats.outliers.capacity * 2;
                     double* new_os = (double*)realloc(individual_mpi_process_stats.outliers.os, new_capacity * sizeof(double));
@@ -280,7 +283,8 @@ int sampler_finisterrae(Finisterrae_params finisterrae)
             }
         }
         individual_mpi_process_stats.mean = mean / n_samples;
-
+	individual_mpi_process_stats.min = min;
+	individual_mpi_process_stats.max = max;
         // One parallel loop for variance
         double var = 0.0;
         #pragma omp parallel for simd reduction(+ : var) // unclear if the for simd reduction applies after we've added other items to the for loop
@@ -316,20 +320,26 @@ int sampler_finisterrae(Finisterrae_params finisterrae)
     }
     free(cache_box); // should never be reached, really
     free(all_bins);
-    return 0;
+
+	if (mpi_id == 0) {
+		printf("\nLast iter:\n");
+		print_stats(&aggregated_mpi_processes_stats);
+	}
+
+	return 0;
 }
 
 int main(int argc, char** argv)
 {
     sampler_finisterrae((Finisterrae_params) {
         .sampler = sample_cost_effectiveness_sentinel_bps_per_million,
-        .n_samples_per_process = 1 * MILLION,
-        .n_samples_total = 10 * MILLION,
+        .n_samples_per_process = 1 * BILLION,
+        .n_samples_total = 1 * TRILLION,
         .histogram_min = 0,
         .histogram_sup = 300,
         .histogram_bin_width = 1,
         .histogram_n_bins = 300,
-        .print_every_n_iters = 10,
+        .print_every_n_iters = 20,
     });
     // Two types of histogram:
     // 1. Exploring the main part of the distribution
