@@ -73,12 +73,13 @@ typedef struct _Summary_stats {
 /* Helpers */
 double combine_variances(Summary_stats* x, Summary_stats* y)
 {
-    double term1 = ((x->n_samples) * x->variance + (y->n_samples) * y->variance) / (x->n_samples + y->n_samples);
-    double term2 = (x->n_samples * y->n_samples * (x->mean - y->mean) * (x->mean - y->mean)) / ((x->n_samples + y->n_samples) * (x->n_samples + y->n_samples));
+    double n = (double)(x->n_samples + y->n_samples);
+    double term1 = (x->variance * ((double)x->n_samples / n)) + (y->variance * ((double)y->n_samples / n));
+    double term2 = ((double)x->n_samples / n) * ((double)y->n_samples / n)) * (x->mean - y->mean) * (x->mean - y->mean);
     double result = term1 + term2;
     return result;
     // https://math.stackexchange.com/questions/2971315/how-do-i-combine-standard-deviations-of-two-groups
-    // but use the standard deviation of the samples, no the estimate of the standard deviation of the underlying distribution
+    // but use the standard deviation of the samples, not the estimate of the standard deviation of the underlying distribution
 }
 
 void reduce_chunk_stats(Summary_stats* accumulator, Summary_stats* new, int n_chunks)
