@@ -215,7 +215,7 @@ int sampler_finisterrae(Finisterrae_params finisterrae)
     // 2. Become more slightly more efficient, as we don't have to call and free memory constantly
 
     uint64_t* all_bins = (uint64_t*)calloc(finisterrae.histogram_n_bins * n_processes, sizeof(uint64_t));
-    for (int i = 0; i < finisterrae.n_samples_total / (finisterrae.n_samples_per_process*n_processes)+1 ; i++) {
+    for (uint64_t i = 0; i < finisterrae.n_samples_total / (finisterrae.n_samples_per_process*(uint64_t)n_processes)+(uint64_t)1 ; i++) {
         // Wait until the finisterrae allocator kills this
 
         // sampler_parallel(sample_cost_effectiveness_cser_bps_per_million, samples, n_threads, n_samples, mpi_id+1+i*n_processes);
@@ -334,8 +334,8 @@ int main(int argc, char** argv)
 {
     sampler_finisterrae((Finisterrae_params) {
         .sampler = sample_cost_effectiveness_sentinel_bps_per_million,
-        .n_samples_per_process = 1 * BILLION,
-        .n_samples_total = 1 * TRILLION,
+        .n_samples_per_process = (uint64_t)1 * BILLION,
+        .n_samples_total = (uint64_t)1 * TRILLION,
         .histogram_min = 0,
         .histogram_sup = 300,
         .histogram_bin_width = 1,
