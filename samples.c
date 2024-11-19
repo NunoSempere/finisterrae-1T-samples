@@ -314,7 +314,7 @@ int sampler_finisterrae(Finisterrae_params finisterrae)
             }
             reduce_chunk_stats(&aggregated_mpi_processes_stats, mpi_processes_stats_array, n_processes);
             if (i % finisterrae.print_every_n_iters == 0) {
-                printf("\nIter %3d:\n", i);
+                printf("\nIter %3ld:\n", i);
                 print_stats(&aggregated_mpi_processes_stats);
             }
         }
