@@ -176,7 +176,7 @@ int sampler_finisterrae(Finisterrae_params finisterrae)
         .min = s,
         .max = s,
         .mean = s,
-        .variance = 0,
+        .variance = 0.0,
         .histogram = aggregate_histogram,
         .outliers = aggregate_histogram_outliers,
     };
@@ -256,7 +256,11 @@ int sampler_finisterrae(Finisterrae_params finisterrae)
         // One serial loop for mean, min, max & histogram
         // Possibly, these could be done more efficiently with openmp reductions,
         // but I don't quite understand them
-        double mean, min, max;
+
+        double mean = 0.0;
+        double min = DBL_MAX; // Use float.h's DBL_MAX for initialization
+        double max = -DBL_MAX;
+
 	#pragma omp parallel for reduction (+ : mean) reduction(min : min) reduction(max : max) 
         for (int k = 0; k < n_samples; k++) {
             mean += xs[k];
@@ -284,8 +288,8 @@ int sampler_finisterrae(Finisterrae_params finisterrae)
             }
         }
         individual_mpi_process_stats.mean = mean / n_samples;
-	individual_mpi_process_stats.min = min;
-	individual_mpi_process_stats.max = max;
+	    individual_mpi_process_stats.min = min;
+	    individual_mpi_process_stats.max = max;
         // One parallel loop for variance
         double var = 0.0;
         #pragma omp parallel for simd reduction(+ : var) // unclear if the for simd reduction applies after we've added other items to the for loop
