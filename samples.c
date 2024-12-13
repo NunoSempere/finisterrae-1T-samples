@@ -9,7 +9,7 @@
 #include "squiggle_c/squiggle_more.h"
 
 // Macro to be able to run part of the code in a system without MPI
-#define NO_MPI // Comment out if running on an MPI system
+// #define NO_MPI // Comment out if running on an MPI system
 #ifdef NO_MPI
 #define IF_MPI(x)
 #define IF_NO_MPI(x) x
