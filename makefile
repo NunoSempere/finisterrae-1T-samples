@@ -16,6 +16,9 @@ FORMATTER=clang-format -i -style=$(STYLE_BLUEPRINT)
 build:
 	$(CC) $(DEBUG) $(OPTIMIZATION) samples.c model.c ./squiggle_c/squiggle.c  ./squiggle_c/squiggle_more.c -lm -fopenmp -o $(OUTPUT)
 
+build-linux:
+	gcc $(DEBUG) $(OPTIMIZATION) samples.c model.c ./squiggle_c/squiggle.c  ./squiggle_c/squiggle_more.c -lm -fopenmp -o $(OUTPUT)
+
 run:
 	$(OUTPUT) 
 

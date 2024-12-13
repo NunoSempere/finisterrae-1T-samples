@@ -12,7 +12,7 @@
 #define THOUSAND 1000
 #define MILLION (1000 * 1000)
 #define BILLION (1000 * MILLION)
-#define TRILLION (1000 * BILLION)
+#define TRILLION ((uint64_t)1000 * (uint64_t)BILLION)
 
 /* Cache optimizations */
 #define CACHE_LINE_SIZE 64
