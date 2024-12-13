@@ -12,15 +12,17 @@ Estimators in the tradition of Fermi or Tetlock sometimes create models that see
 
 However, those idioms favour relying on Monte Carlo estimation, that is, approximating a model by drawing samples rather than specifying the model exactly. This approach sometimes has difficulty modelling long-tail behaviour. 
 
-For instance, in our squiggle.c test code, we draw 10M samples from various distributions, and then compare the mean and standard deviation of the samples to the mean and standard deviation of the underlying distributions. This sometimes shows relative errors of 50% or more. For insance: 
+For instance, in our squiggle.c test suite, we draw 10M samples from various distributions, and then compare the mean and standard deviation of the samples to the mean and standard deviation of the underlying distributions. With 10M samples, this sometimes shows relative errors of 50% or more. For insance: 
 
 ```
 [-] Mean test for lognormal(0.644931, 4.795860) NOT passed.
-Mean of lognormal(0.644931, 4.795860): 125053.904456, vs expected mean: 188163.894101
-delta: -63109.989645, relative delta: -0.504662
+Mean of lognormal(0.644931, 4.795860): 125053.904456, 
+  vs expected mean: 188163.894101
+  delta: -63109.989645, relative delta: -0.504662
 [-] Std test for lognormal(0.644931, 4.795860) NOT passed.
-Std of lognormal(0.644931, 4.795860): 39976300.711166, vs expected std: 18577298706.170452
-delta: -18537322405.459286, relative delta: -463.707799
+Std of lognormal(0.644931, 4.795860): 39976300.711166,
+  vs expected std: 18577298706.170452
+  delta: -18537322405.459286, relative delta: -463.707799
 ```
 
 To explore those limits, and also just for the sake of the technical challenge, we describe how to draw 10e12 samples (an American trillion) from a judgmental model. In this case, the model is a very rough back-of-the-envelope estimate of the altruistic impact of [Sentinel](https://sentinel-team.org/)—a foresight and emergency response team set up by one of the authors—in basis points of existential/catastrophic risk[^cat] mitigated or averted per million dollars. We show how summary statistics change as we draw more samples. We conclude discussing limitations and practical applications.
@@ -55,17 +57,36 @@ Still, the above table shows that the time it takes to run a simple Fermi model 
 
 ### 1.2. Use standard optimizations. 
 
-Once we have chosen a fast language like C, we can deploy some standard practices, like inlining functions, passing pointers not values, or packing structs into a single cache line. The difference between an [initial approach](https://github.com/NunoSempere/time-to-botec/blob/f0493f695552b3b76c34d5e18f2f3f14ac8e4bd9/C/samples/samples.c) and a [final version with more care](https://github.com/NunoSempere/time-to-botec/blob/master/C/samples.c) can be notable. 
+Once we have chosen a fast language like C, we can deploy some standard practices, like inlining functions, passing pointers not values, or packing structs into a single cache line. The difference between an [rough first pass](https://github.com/NunoSempere/time-to-botec/blob/f0493f695552b3b76c34d5e18f2f3f14ac8e4bd9/C/samples/samples.c) and a [final version with more care](https://github.com/NunoSempere/time-to-botec/blob/master/C/samples.c) can be notable. 
 
 Using [compiler flags](https://github.com/NunoSempere/time-to-botec/blob/master/squiggle.c/makefile#L3) can also give a noticeable speed bump, as can profiling. However, we didn't take advantage of this fully for drawing 10e12 samples because the compiler in our local machines (gcc/clang) was different than the compiler in the supercomputer we used for our final run (icc patched for usage with MPI).
 
-A memorable moment was switching from antiquated libraries to reading the literature and simply baking in our own randomness primitives, mostly following the work of Marsaglia. Back in our javascript days, stlib.io had needless complexity because of the need to support incompatible types of javascript models. This is somewhat of a judgment call. Languages such as Rust, zig, or even go have some well-optimized mathematical primitives, and pulling them in might be the better choice.
+### 1.3. Directly implementing fast randomness primitives helps with speed and clarity.
 
-Using a fast pseudorandomness generation function for a uniform distribution, and fast ways to go from a uniform to other distributions.
+Back in our javascript days, we were frustrated at stlib.io for having needless complexity because of the need to support incompatible types of javascript modules, and for being slow. When writting squiggle.c, we initially looked for a library to rely on, and chose the GNU Scientific Library for supporting a good range of distributions.
 
-Also buys one conceptual clarity, few levels of abstraction. 
+However, ultimately, we ended up writting our own randomness primitives, mostly following the work of Marsaglia. Languages like Rust or zig have some well-optimized randomness primitives that have sometimes been a joy to read. But C doesn't, and C has other virtues, like being ubicuitous and having powerful parallelism and distributed computing libraries. 
 
-### 1.3. Use single-core and multi-code parallelism
+We chose the xorshift pseudorandomness generation, on account of its speed, and keeping in mind that we didn't at all need our PRNG to be cryptographically secure.
+
+```
+static uint64_t xorshift64(uint64_t* seed)
+{
+    uint64_t x = *seed;
+    x ^= x << 13;
+    x ^= x >> 7;
+    x ^= x << 17;
+    return *seed = x;
+}
+```
+
+The seed is fed as a pointer, rather than it being a global variable, to allow for parallelism. 
+
+In some sense, drawing 10e12 samples from such a simple generator feels like stretching it too far. That said, we aren't aware f anything we are doing that's specifically wrong with it, and the algorithm's cycle although is (TODO: check cycle). Maybe the popint we are groping towards s that if you can draw 1T samples *at all*, you can draw 100K, 1M, 10M samples very fast.
+
+Readers are welcome to browse the squiggle.c [README.md](), [FOLK_WISDOM.md]() and [library]() [files]() to get a longer treatment on the virtue and pitfalls of our fast Monte Carlo primitives.  
+
+### 1.4. Use single-core and multi-code parallelism
 
 We further used OpenMP (for an 8x to 16x speedup if using that many thread on our local machines, but 64x if using the cores in the Finisterrae supercomputer), and MPI, for a speedup that ended up being roughly 4x (4 nodes, minus a bit of overhead) but which could be much scaled. For fast multi-core orchestration, our sense is that there aren't that many alternatives to MPI. 
 
@@ -86,9 +107,11 @@ typedef struct seed_cache_box_t {
 seed_cache_box* cache_box = (seed_cache_box*)malloc(sizeof(seed_cache_box) * (size_t)n_threads);
 ```
 
-Throughout, we used C macros sparingly, but we did use them to allow MPI and non-MPI code to exist side by side, such that we could run the OpenMP side on our local machine, with an MPI "world" of only one machine.
+In our project, we used C macros sparingly, but we did use them to allow MPI and non-MPI code to exist side by side, such that we could run the OpenMP side on our local machine, with an MPI "world" of only one machine.
 
-### 1.4. Design for speed then compromise, rather than the reverse
+Readers can find our OpenMP and MPI code in the samples.c file in [this repository](), as well as recipes to actually deploy it in our makefile. TODO: add link.
+
+### 1.5. Design for speed then compromise, rather than the reverse
 
 Throughout this project, we didn't always make the speed-maximalist decision all the time. Some notable places where we didn't are as follows:
 
@@ -116,15 +139,9 @@ if(p < p1){
 
 We further didn't use algebraic manipulations. For instance, multiplying two lognormal distributions, or two beta distributions together, produces a result in the same family. However, when expressing a judgmental model, it isn't parsimonious to group betas and lognormals together to allow for algebraic manipulations: doing so would make the judgmental model much less readable, and the underlying code messier and less general. We took a ~2-3x slowdown hit because of this. 
 
-Ultimately, there s a sweet spot in the (high user accessibility, high complexity, low speed) end of the spectrum: tools like causal or squiggle. There is also a sweet spot in the (low user accessibility, low complexity, high speed): the project we are exploring. With some of the lessons from writting squiggle.c, one of the authors created [fermi](https://git.nunosempere.com/NunoSempere/fermi), a command line read-evaluate-print loop (REPL) in go in which it is much faster to write small models, at the cost of being slower (while still being able to draw 100K samples instantaneuosly)
+Ultimately, there s a sweet spot in the (high user accessibility, high complexity, low speed) end of the spectrum: tools like causal, guesstimate squiggle. There is also a sweet spot in the (low user accessibility, low complexity, high speed): the project we are exploring. With some of the lessons from writting squiggle.c, one of the authors created [fermi](https://git.nunosempere.com/NunoSempere/fermi), a command line read-evaluate-print loop (REPL) in go in which it is much faster to write small models, at the cost of being slower (while still being able to draw 100K samples instantaneuosly).
 
 The punchline is that by paying attention to speed from the beginning and then dialing it down for some expressivity, usability gains, we end up with a much faster result, one that is able to better explore the long tail of outcomes due to being able to draw enough samples to meaningfully draw from it. 
-
-Go has almost none of these tricks. 
-
-Compiling on icc compiler. Requires not using useful gcc extensions, like nested functions.
-
-Reader can find recipes in the makefile. 
 
 ## 2. Results as samples increase 
 
@@ -132,15 +149,11 @@ Reader can find recipes in the makefile.
 
 ### 2.2. Minimum and maximum
 
-## 3. An abuse of the underlying PRNG primitives?
-
-Do the underlying pseudo-random number generator primitives we are using stand up to scaling to 1T samples? 
-If you can draw 1T samples *at all*, you can draw 100K, 1M, 10M samples very fast.
-
 ## Conclusion
 
 Rethink Priorities' models puny struggled (https://forum.effectivealtruism.org/posts/pniDWyjc9vY5sjGre/rethink-priorities-cross-cause-cost-effectiveness-model) to reach more than 150k samples. Eventually, with some optimizations, they moved to the billions. Much more is possible with a focus on speed. 
 
+Thin line between Pascal's wager and vNM. Kosonen?
 
 ---
 
