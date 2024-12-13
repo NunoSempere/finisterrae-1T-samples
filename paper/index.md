@@ -82,15 +82,15 @@ static uint64_t xorshift64(uint64_t* seed)
 
 The seed is fed as a pointer, rather than it being a global variable, to allow for parallelism. 
 
-In some sense, drawing 10e12 samples from such a simple generator feels like stretching it too far. That said, we aren't aware f anything we are doing that's specifically wrong with it, and the algorithm's cycle although is (TODO: check cycle). Maybe the popint we are groping towards s that if you can draw 1T samples *at all*, you can draw 100K, 1M, 10M samples very fast.
+In some sense, drawing 10e12 samples from such a simple generator feels like stretching it too far. That said, we aren't aware f anything we are doing that's specifically wrong with it, and the algorithm's [period](http://www.jstatsoft.org/v08/i14/paper) is $2^{64} - 1 $. Regardless, if you can draw 1T samples *at all*, you can draw 100K, 1M, 10M, 100M samples very fast.
 
-Readers are welcome to browse the squiggle.c [README.md](), [FOLK_WISDOM.md]() and [library]() [files]() to get a longer treatment on the virtue and pitfalls of our fast Monte Carlo primitives.  
+Readers are encouraged to browse the squiggle.c [README.md](https://git.nunosempere.com/personal/squiggle.c), [FOLK_WISDOM.md](https://git.nunosempere.com/personal/squiggle.c/src/branch/master/FOLK_WISDOM.md) and [library](https://git.nunosempere.com/personal/squiggle.c/src/branch/master/squiggle.c) [code](https://git.nunosempere.com/personal/squiggle.c/src/branch/master/squiggle_more.c) for a longer treatment on the virtue and pitfalls of our fast Monte Carlo primitives.  
 
 ### 1.4. Use single-core and multi-code parallelism
 
-We further used OpenMP (for an 8x to 16x speedup if using that many thread on our local machines, but 64x if using the cores in the Finisterrae supercomputer), and MPI, for a speedup that ended up being roughly 4x (4 nodes, minus a bit of overhead) but which could be much scaled. For fast multi-core orchestration, our sense is that there aren't that many alternatives to MPI. 
+We used OpenMP (for an 8x to 16x speedup if using that many thread on our local machines, but 64x if using the cores in the [Finisterrae](https://en.wikipedia.org/wiki/CESGA) supercomputer); and MPI, for a speedup that ended up being roughly 4x (4 nodes, minus a bit of overhead) but which could be much scaled. For fast multi-core orchestration, our sense is that there aren't that many alternatives to MPI. 
 
-We could further get another 10x speedup by spending 10x as much time (60 hours instead of 6 hours); however, that quickly doesn't scale. One could also get another multiplier by using a more recent generation computer, but we didn't pursue that option, or it wasn't available to us. 
+We could get another 10x speedup by spending 10x as much time (60 hours instead of 6 hours) or 10x more cores. However, that approach quickly doesn't scale. One could also get a final speedup by using a more recent generation computer, but we didn't pursue that option, or it wasn't available to us. 
 
 When doing parallelism, one interesting trick is to structure arrays such that each thread is accessing different parts of an array simultaneously, but without cache conflicts and misses. One can do this by starting each thread far enough, but one can also pad the elements of an array such that cache conflicts can't happen, as follows:
 
@@ -109,7 +109,7 @@ seed_cache_box* cache_box = (seed_cache_box*)malloc(sizeof(seed_cache_box) * (si
 
 In our project, we used C macros sparingly, but we did use them to allow MPI and non-MPI code to exist side by side, such that we could run the OpenMP side on our local machine, with an MPI "world" of only one machine.
 
-Readers can find our OpenMP and MPI code in the samples.c file in [this repository](), as well as recipes to actually deploy it in our makefile. TODO: add link.
+Readers can find our OpenMP and MPI code in the [samples.c](https://github.com/NunoSempere/finisterrae-1T-samples/blob/master/samples.c) file in [this repository](https://github.com/NunoSempere/finisterrae-1T-samples), as well as [recipes](https://github.com/NunoSempere/finisterrae-1T-samples/blob/master/makefile) to [launch](https://github.com/NunoSempere/finisterrae-1T-samples/blob/master/launch.sh) this code on the Finisterrae supercomputer.
 
 ### 1.5. Design for speed then compromise, rather than the reverse
 
@@ -151,9 +151,11 @@ The punchline is that by paying attention to speed from the beginning and then d
 
 ## Conclusion
 
+With some care, we can explore the long tail outcomes in judgmental models, until we reach the thin line between Pascal's wager and vNM.
+
 Rethink Priorities' models puny struggled (https://forum.effectivealtruism.org/posts/pniDWyjc9vY5sjGre/rethink-priorities-cross-cause-cost-effectiveness-model) to reach more than 150k samples. Eventually, with some optimizations, they moved to the billions. Much more is possible with a focus on speed. 
 
-Thin line between Pascal's wager and vNM. Kosonen?
+Long tail, the thin line between Pascal's wager and vNM. Kosonen?
 
 ---
 

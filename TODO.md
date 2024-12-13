@@ -1,9 +1,0 @@
-- [x] Deal with output?
-  - [x] Print to file, every n iterations
-  - Finisterrae sends a file
-- [x] Save outliers? => use struct instead of file
-- [x] Expand outliers struct if overflows 
-- [?] Expand bin width to fix overlow
-- [x] Choose histogram & stats & num samples parameters 
-- [x] Is there something wrong with the aggregator? It seems like the n increases much slower?
-- [ ] Find a better way to represent both long tails and more granularity between 0 and 1. E.g., a log scale?
