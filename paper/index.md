@@ -95,16 +95,18 @@ We could get another 10x speedup by spending 10x as much time (60 hours instead 
 When doing parallelism, one interesting trick is to structure arrays such that each thread is accessing different parts of an array simultaneously, but without cache conflicts and misses. One can do this by starting each thread far enough, but one can also pad the elements of an array such that cache conflicts can't happen, as follows:
 
 ```
-#define CACHE_LINE_SIZE 64
+#define CACHE_LINE_SIZE 64 // 64 *bytes*
 typedef struct seed_cache_box_t {
     uint64_t seed;
     char padding[CACHE_LINE_SIZE - sizeof(uint64_t)];
-    // Cache line size is 64 *bytes*, uint64_t is 64 *bits* (8 bytes). Different units!
+    // uint64_t is 64 *bits* (8 bytes)
 } seed_cache_box;
 
 // ...
 
-seed_cache_box* cache_box = (seed_cache_box*)malloc(sizeof(seed_cache_box) * (size_t)n_threads);
+seed_cache_box* cache_box = 
+  (seed_cache_box*)malloc(sizeof(seed_cache_box) 
+                            * (size_t)n_threads);
 ```
 
 In our project, we used C macros sparingly, but we did use them to allow MPI and non-MPI code to exist side by side, such that we could run the OpenMP side on our local machine, with an MPI "world" of only one machine.
