@@ -3,7 +3,7 @@ title: "Drawing 10e12 samples from a judgmental estimation model"
 author: Nuño Sempere, Jorge Sierra
 date: \today
 urlcolor: blue
-abstract: "To draw 10e12 samples you need two things: a fast language, and a supercomputer."
+abstract: "To draw 10e12 samples you need two things: a fast language, and a fast computer."
 ---
 
 ## Background and motivation
@@ -12,7 +12,7 @@ Estimators in the tradition of Fermi or Tetlock sometimes create models that see
 
 However, those idioms favor relying on Monte Carlo estimation, that is, approximating a model by drawing samples rather than specifying the model exactly. This approach sometimes has difficulty modeling long-tail behavior. 
 
-For instance, in our squiggle.c test suite, we draw 10M samples from various distributions, and then compare the mean and standard deviation of the samples to the mean and standard deviation of the underlying distributions. With 10M samples, this sometimes shows relative errors of 50% or more. For instance: 
+In our squiggle.c tests, we draw 10M samples from various distributions, and then compare the mean and standard deviation of the samples to the mean and standard deviation of the underlying distributions. With 10M samples, this sometimes can still result in relative errors of 50% or more. For instance: 
 
 ```
 [-] Mean test for lognormal(0.644931, 4.795860) NOT passed.
@@ -28,6 +28,8 @@ Std of lognormal(0.644931, 4.795860): 39976300.711166,
 To explore those limits, and also just for the sake of the technical challenge, we describe how to draw 10e12 samples (an American trillion) from a judgmental model. In this case, the model is a very rough back-of-the-envelope estimate of the altruistic impact of [Sentinel](https://sentinel-team.org/)—a foresight and emergency response team set up by one of the authors—in basis points of existential/catastrophic risk[^cat] mitigated or averted per million dollars. We show how summary statistics change as we draw more samples. We conclude discussing limitations and practical applications.
 
 [^cat]: with a conversion factor of existential risk being 100x worse than catastrophic risk.
+
+TODO: in xyz nodes of abc type on the Finisterrae supercomputer
 
 ## 1. How to draw 10e9 samples
 
@@ -63,7 +65,7 @@ Using [compiler flags](https://github.com/NunoSempere/time-to-botec/blob/master/
 
 ### 1.3. Directly implementing fast randomness primitives helps with speed and clarity.
 
-Back in our JavaScript days, we were frustrated at stlib.io for having needless complexity because of the need to support incompatible types of JavaScript modules, and for being slow. When writing squiggle.c, we initially looked for a library to rely on, and chose the GNU Scientific Library for supporting a good range of distributions.
+Back in our Javascript days, we were frustrated at stlib.io for having needless complexity because of the need to support incompatible types of Javascript modules, and for being slow. When writing squiggle.c, we initially looked for a library to rely on, and chose the GNU Scientific Library for supporting a good range of distributions.
 
 However, ultimately, we ended up writing our own randomness primitives, mostly following the work of Marsaglia. Languages like Rust or zig have some well-optimized randomness primitives that have sometimes been a joy to read. But C doesn't, and C has other virtues, like being ubiquitous and having powerful parallelism and distributed computing libraries. 
 
